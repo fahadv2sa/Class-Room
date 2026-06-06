@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SubscriptionPlan {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum SessionRole {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+}
+
+enum SchoolStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum RegistrationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SchoolLevelType {
+  PRIMARY
+  MIDDLE
+  HIGH
+}
+
+model SuperAdmin {
+  id                           String                      @id @default(cuid())
+  email                        String                      @unique
+  passwordHash                 String                      @map("password_hash")
+  fullName                     String                      @map("full_name")
+  isActive                     Boolean                     @default(true) @map("is_active")
+  createdAt                    DateTime                    @default(now()) @map("created_at")
+  updatedAt                    DateTime                    @updatedAt @map("updated_at")
+  sessions                     Session[]
+  approvedSchools              School[]                    @relation("SchoolApprovedBy")
+  rejectedSchools              School[]                    @relation("SchoolRejectedBy")
+  suspendedSchools             School[]                    @relation("SchoolSuspendedBy")
+  approvedRegistrationRequests SchoolRegistrationRequest[] @relation("RegistrationApprovedBy")
+  rejectedRegistrationRequests SchoolRegistrationRequest[] @relation("RegistrationRejectedBy")
+
+  @@map("super_admins")
+}
+
+model School {
+  id                 String             @id @default(cuid())
+  schoolCode         String             @unique @map("school_code")
+  name               String
+  logoUrl            String?            @map("logo_url")
+  city               String
+  country            String
+  subscriptionPlan   SubscriptionPlan   @default(STARTER) @map("subscription_plan")
+  subscriptionStatus SubscriptionStatus @default(TRIALING) @map("subscription_status")
+  status             SchoolStatus       @default(PENDING)
+  approvedBy         String?            @map("approved_by")
+  approvedAt         DateTime?          @map("approved_at")
+  rejectedBy         String?            @map("rejected_by")
+  rejectedAt         DateTime?          @map("rejected_at")
+  suspendedBy        String?            @map("suspended_by")
+  suspendedAt        DateTime?          @map("suspended_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  approvedByAdmin    SuperAdmin?        @relation("SchoolApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  rejectedByAdmin    SuperAdmin?        @relation("SchoolRejectedBy", fields: [rejectedBy], references: [id], onDelete: SetNull)
+  suspendedByAdmin   SuperAdmin?        @relation("SchoolSuspendedBy", fields: [suspendedBy], references: [id], onDelete: SetNull)
+  admins             SchoolAdmin[]
+  subscriptions      Subscription[]
+  sessions           Session[]
+  academicYears      AcademicYear[]
+  levels             SchoolLevel[]
+  classrooms         Classroom[]
+
+  @@index([status])
+  @@index([subscriptionStatus])
+  @@map("schools")
+}
+
+model SchoolAdmin {
+  id           String    @id @default(cuid())
+  schoolId     String    @map("school_id")
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  fullName     String    @map("full_name")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  school       School    @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  sessions     Session[]
+
+  @@index([schoolId])
+  @@index([isActive])
+  @@map("school_admins")
+}
+
+model AcademicYear {
+  id         String        @id @default(cuid())
+  schoolId   String        @map("school_id")
+  name       String
+  startDate  DateTime      @map("start_date")
+  endDate    DateTime      @map("end_date")
+  isActive   Boolean       @default(false) @map("is_active")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  school     School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  levels     SchoolLevel[]
+  classrooms Classroom[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@index([schoolId, isActive])
+  @@map("academic_years")
+}
+
+model SchoolLevel {
+  id             String          @id @default(cuid())
+  schoolId       String          @map("school_id")
+  academicYearId String          @map("academic_year_id")
+  levelType      SchoolLevelType @map("level_type")
+  displayName    String          @map("display_name")
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  classrooms     Classroom[]
+
+  @@unique([schoolId, academicYearId, levelType])
+  @@index([schoolId])
+  @@index([academicYearId])
+  @@index([schoolId, isActive])
+  @@map("school_levels")
+}
+
+model Classroom {
+  id             String       @id @default(cuid())
+  schoolId       String       @map("school_id")
+  academicYearId String       @map("academic_year_id")
+  levelId        String       @map("level_id")
+  classroomCode  String       @map("classroom_code")
+  classroomName  String       @map("classroom_name")
+  isActive       Boolean      @default(true) @map("is_active")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  level          SchoolLevel  @relation(fields: [levelId], references: [id], onDelete: Restrict)
+
+  @@unique([schoolId, academicYearId, classroomCode])
+  @@index([schoolId])
+  @@index([academicYearId])
+  @@index([levelId])
+  @@index([schoolId, isActive])
+  @@map("classrooms")
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  schoolId  String             @map("school_id")
+  plan      SubscriptionPlan
+  status    SubscriptionStatus
+  startsAt  DateTime           @map("starts_at")
+  expiresAt DateTime?          @map("expires_at")
+  createdAt DateTime           @default(now()) @map("created_at")
+  school    School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("subscriptions")
+}
+
+model Session {
+  id            String       @id @default(cuid())
+  tokenHash     String       @unique @map("token_hash")
+  role          SessionRole
+  superAdminId  String?      @map("super_admin_id")
+  schoolAdminId String?      @map("school_admin_id")
+  schoolId      String?      @map("school_id")
+  expiresAt     DateTime     @map("expires_at")
+  revokedAt     DateTime?    @map("revoked_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  superAdmin    SuperAdmin?  @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+  schoolAdmin   SchoolAdmin? @relation(fields: [schoolAdminId], references: [id], onDelete: Cascade)
+  school        School?      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([role])
+  @@index([schoolId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model SchoolRegistrationRequest {
+  id              String                    @id @default(cuid())
+  schoolName      String                    @map("school_name")
+  city            String
+  country         String
+  adminName       String                    @map("admin_name")
+  adminEmail      String                    @map("admin_email")
+  phone           String
+  status          RegistrationRequestStatus @default(PENDING)
+  approvedBy      String?                   @map("approved_by")
+  approvedAt      DateTime?                 @map("approved_at")
+  rejectedBy      String?                   @map("rejected_by")
+  rejectedAt      DateTime?                 @map("rejected_at")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  approvedByAdmin SuperAdmin?               @relation("RegistrationApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  rejectedByAdmin SuperAdmin?               @relation("RegistrationRejectedBy", fields: [rejectedBy], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([adminEmail])
+  @@map("school_registration_requests")
+}
