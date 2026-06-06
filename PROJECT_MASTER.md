@@ -65,6 +65,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2B.6R Native Internationalization Refactor
 - Phase 2D Classroom Device Foundation
 - Phase 2E RFID Attendance Engine Foundation
+- Phase 2F Classroom Presence & Movement Foundation
 
 ### In Progress
 
@@ -72,7 +73,6 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 
 ### Planned
 
-- Phase 2F Movement Tracking
 - Phase 2G Noise Monitoring
 - Phase 2H Reporting
 - Phase 3.0 AI Layer
@@ -411,6 +411,60 @@ Not implemented:
 - Real device authentication.
 - MQTT, offline queues, real-time streaming, or firmware logic.
 
+### Phase 2F: Classroom Presence & Movement Foundation
+
+Objective:
+
+Create the operational classroom presence layer that answers who is present, absent, late, inside the classroom, outside the classroom, and whether a teacher is currently inside.
+
+Implemented:
+
+- `StudentPresenceState` current-state model.
+- `TeacherPresenceState` current-state model.
+- `StudentMovementRecord` movement cycle model.
+- `TeacherMovementRecord` classroom entry/exit model.
+- `SchoolSettings.late_threshold_minutes`.
+- RFID processing updates presence and movement state from accepted `RFIDScanEvent` rows.
+- Classroom presence APIs.
+- Student movement APIs.
+- Teacher movement API.
+- Database-backed Movement page.
+- Settings page support for per-school late threshold.
+
+Major architectural decisions:
+
+- `RFIDScanEvent` remains the single source of truth.
+- Presence state is current operational state only.
+- Movement records are derived from RFID scan events and retain references to source scan event rows.
+- EXIT scans open student movement cycles.
+- ENTRY scans close the latest open student movement cycle.
+- Teacher movement tracks classroom entry/exit only and is not performance evaluation.
+- The late rule is per school and defaults to 10 minutes after attendance session start.
+
+APIs added:
+
+- `GET /api/presence/classrooms`
+- `GET /api/presence/classrooms/[classroomId]`
+- `GET /api/movements/students`
+- `GET /api/movements/students/[studentId]`
+- `GET /api/movements/teachers`
+
+Database entities added:
+
+- `StudentPresenceState`
+- `TeacherPresenceState`
+- `StudentMovementRecord`
+- `TeacherMovementRecord`
+
+Not implemented:
+
+- Noise monitoring.
+- Reporting engine.
+- AI.
+- Timetables.
+- School-wide gate attendance.
+- Teacher schedule management.
+
 ---
 
 ## 3. System Architecture
@@ -501,6 +555,7 @@ Migrations:
 - `20260606143000_teachers_students_foundation`
 - `20260606160000_classroom_device_foundation`
 - `20260606170000_rfid_attendance_engine_foundation`
+- `20260606180000_classroom_presence_movement_foundation`
 
 ### Authentication
 
@@ -835,7 +890,88 @@ Important constraints:
 - Unique `attendance_session_id + student_id`.
 - Status is `ABSENT`, `PRESENT`, `LATE`, or `EXCUSED`.
 - ENTRY scans can mark a student present.
-- EXIT scans can update `last_exit_at` only; movement analytics are future Phase 2F.
+- EXIT scans can update `last_exit_at`.
+- Presence and movement state are derived from RFIDScanEvent.
+
+### StudentPresenceState
+
+Purpose:
+
+Current live classroom presence state for one student in one attendance session.
+
+Key relationships:
+
+- Belongs to School.
+- Belongs to Classroom.
+- Belongs to Student.
+- Belongs to ClassroomAttendanceSession.
+- References the latest RFIDScanEvent that changed the state.
+
+Important constraints:
+
+- Unique `attendance_session_id + student_id`.
+- State is `INSIDE_CLASSROOM`, `OUTSIDE_CLASSROOM`, or `ABSENT`.
+- Derived entirely from RFIDScanEvent.
+
+### TeacherPresenceState
+
+Purpose:
+
+Current classroom presence state for a teacher.
+
+Key relationships:
+
+- Belongs to School.
+- Belongs to Classroom.
+- Belongs to Teacher.
+- References the latest RFIDScanEvent that changed the state.
+
+Important constraints:
+
+- Unique `classroom_id + teacher_id`.
+- State is `INSIDE_CLASSROOM` or `OUTSIDE_CLASSROOM`.
+- Derived entirely from RFIDScanEvent.
+- Does not represent teacher scoring or schedule compliance.
+
+### StudentMovementRecord
+
+Purpose:
+
+Derived student classroom exit/return cycle.
+
+Key relationships:
+
+- Belongs to School.
+- Belongs to Classroom.
+- Belongs to Student.
+- Belongs to ClassroomAttendanceSession.
+- References exit and return RFIDScanEvent rows.
+
+Important constraints:
+
+- Status is `OPEN` or `CLOSED`.
+- EXIT scans create open records.
+- ENTRY scans close the latest open record and calculate duration.
+- RFIDScanEvent remains the source of truth.
+
+### TeacherMovementRecord
+
+Purpose:
+
+Derived teacher classroom entry/exit log.
+
+Key relationships:
+
+- Belongs to School.
+- Belongs to Classroom.
+- Belongs to Teacher.
+- References entry and exit RFIDScanEvent rows.
+
+Important constraints:
+
+- Status is `INSIDE` or `OUTSIDE`.
+- Simple operational presence tracking only.
+- Does not implement teacher attendance scoring, payroll, or schedule management.
 
 ### Teacher
 
@@ -1037,6 +1173,21 @@ Permission terms:
 | Method | Route | Purpose | Permissions |
 |---|---|---|---|
 | GET | `/api/attendance-records` | List per-student attendance records with pagination and filters | Tenant scoped |
+
+### Presence
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| GET | `/api/presence/classrooms` | List current classroom presence summaries | Tenant scoped |
+| GET | `/api/presence/classrooms/[classroomId]` | Get current presence state for one classroom | Tenant scoped |
+
+### Movements
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| GET | `/api/movements/students` | List derived student movement records | Tenant scoped |
+| GET | `/api/movements/students/[studentId]` | List movement records for one student | Tenant scoped |
+| GET | `/api/movements/teachers` | List derived teacher movement records | Tenant scoped |
 
 ### Teachers
 
@@ -1295,7 +1446,7 @@ Not implemented:
 - Live device telemetry ingestion.
 - Production hardware RFID scanning.
 - Device-authenticated attendance ingestion.
-- Movement tracking.
+- Classroom presence and movement state are implemented in Phase 2F from RFIDScanEvent.
 - Noise telemetry processing.
 
 Note:
@@ -1339,36 +1490,50 @@ Not implemented:
 - MQTT or real-time streaming.
 - Offline device queue.
 - Firmware logic.
-- Movement analytics.
+- Advanced movement analytics and reports.
 - Reporting engine.
 
 ---
 
-## 13. Movement Tracking Roadmap
+## 13. Classroom Presence & Movement Foundation
 
-Status: planned, not implemented.
+Status: Phase 2F foundation implemented.
 
-Intended purpose:
+Implemented purpose:
 
-Track student exits and returns from classrooms using future device/RFID/card activity.
+Track current classroom presence and simple classroom entry/exit movement cycles from RFIDScanEvent.
 
-Planned architecture direction:
+Implemented architecture:
 
-- Movement records should include `school_id`.
-- Movement records should reference `student_id`.
-- Movement records should reference `classroom_id`.
-- Movement records should be connected to an academic year when implemented.
-- Movement rules should respect school settings such as `student_exit_limit_minutes` and movement alert toggles.
+- RFIDScanEvent remains the single source of truth.
+- StudentPresenceState stores current live state only.
+- TeacherPresenceState stores current teacher classroom presence only.
+- StudentMovementRecord represents open or completed student exit/return cycles.
+- TeacherMovementRecord represents teacher classroom entry/exit state.
+- Movement records include `school_id`.
+- Movement records reference classroom, person, attendance session where applicable, and source scan event rows.
+- The late threshold rule uses `SchoolSettings.late_threshold_minutes`.
+
+Implemented:
+
+- Student presence model.
+- Teacher presence model.
+- Student movement model.
+- Teacher movement model.
+- Classroom presence APIs.
+- Movement listing APIs.
+- Database-backed Movement page.
 
 Not implemented:
 
-- Movement tracking database model.
-- Live movement event processing.
+- Movement reports.
+- Movement analytics dashboards beyond the approved existing page.
 - Movement alert engine.
+- Timetables or teacher schedules.
 
 Note:
 
-The current movement page displays mock/prototype dashboard data.
+The current movement page keeps the approved layout and now reads derived movement data from database APIs.
 
 ---
 
@@ -1440,19 +1605,15 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2B.6R Native Internationalization Refactor
 - Phase 2D Classroom Device Foundation
 - Phase 2E RFID Attendance Engine Foundation
+- Phase 2F Classroom Presence & Movement Foundation
 
 ### Next
 
-- Phase 2F Movement Tracking
 - Phase 2G Noise Monitoring
 - Phase 2H Reporting
 - Phase 3.0 AI Layer
 
 ### Planned Detail
-
-Phase 2F Movement Tracking:
-
-- Intended to add student exit/return tracking and movement rules.
 
 Phase 2G Noise Monitoring:
 

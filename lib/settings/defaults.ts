@@ -4,6 +4,7 @@ export const defaultSchoolSettings = {
   language: 'AR' as Language,
   noiseThresholdDb: 70,
   studentExitLimitMinutes: 10,
+  lateThresholdMinutes: 10,
   noiseAlertsEnabled: true,
   movementAlertsEnabled: true,
   attendanceAlertsEnabled: true,

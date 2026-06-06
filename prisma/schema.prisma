@@ -125,6 +125,27 @@ enum StudentAttendanceStatus {
   EXCUSED
 }
 
+enum StudentCurrentState {
+  INSIDE_CLASSROOM
+  OUTSIDE_CLASSROOM
+  ABSENT
+}
+
+enum TeacherCurrentState {
+  INSIDE_CLASSROOM
+  OUTSIDE_CLASSROOM
+}
+
+enum MovementStatus {
+  OPEN
+  CLOSED
+}
+
+enum TeacherMovementStatus {
+  INSIDE
+  OUTSIDE
+}
+
 model SuperAdmin {
   id                           String                      @id @default(cuid())
   email                        String                      @unique
@@ -178,6 +199,10 @@ model School {
   rfidScanEvents     RFIDScanEvent[]
   attendanceSessions ClassroomAttendanceSession[]
   attendanceRecords  StudentAttendanceRecord[]
+  studentPresenceStates StudentPresenceState[]
+  teacherPresenceStates TeacherPresenceState[]
+  studentMovementRecords StudentMovementRecord[]
+  teacherMovementRecords TeacherMovementRecord[]
 
   @@index([status])
   @@index([subscriptionStatus])
@@ -260,6 +285,10 @@ model Classroom {
   rfidScanEvents RFIDScanEvent[]
   attendanceSessions ClassroomAttendanceSession[]
   attendanceRecords StudentAttendanceRecord[]
+  studentPresenceStates StudentPresenceState[]
+  teacherPresenceStates TeacherPresenceState[]
+  studentMovementRecords StudentMovementRecord[]
+  teacherMovementRecords TeacherMovementRecord[]
 
   @@unique([schoolId, academicYearId, classroomCode])
   @@unique([id, schoolId])
@@ -325,6 +354,8 @@ model Teacher {
   cardCredentials CardCredential[]
   rfidScanEvents  RFIDScanEvent[]
   attendanceSessions ClassroomAttendanceSession[]
+  teacherPresenceStates TeacherPresenceState[]
+  teacherMovementRecords TeacherMovementRecord[]
 
   @@unique([schoolId, employeeNumber])
   @@unique([id, schoolId])
@@ -360,6 +391,8 @@ model Student {
   cardCredentials CardCredential[]
   rfidScanEvents  RFIDScanEvent[]
   attendanceRecords StudentAttendanceRecord[]
+  presenceStates StudentPresenceState[]
+  movementRecords StudentMovementRecord[]
 
   @@unique([schoolId, studentNumber])
   @@unique([id, schoolId])
@@ -424,6 +457,12 @@ model RFIDScanEvent {
   teacher              Teacher?           @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
   duplicateOfEvent     RFIDScanEvent?     @relation("RFIDScanEventDuplicates", fields: [duplicateOfEventId], references: [id], onDelete: SetNull)
   duplicateEvents      RFIDScanEvent[]    @relation("RFIDScanEventDuplicates")
+  studentPresenceStates StudentPresenceState[]
+  teacherPresenceStates TeacherPresenceState[]
+  studentMovementExits StudentMovementRecord[] @relation("StudentMovementExitScan")
+  studentMovementReturns StudentMovementRecord[] @relation("StudentMovementReturnScan")
+  teacherMovementEntries TeacherMovementRecord[] @relation("TeacherMovementEntryScan")
+  teacherMovementExits TeacherMovementRecord[] @relation("TeacherMovementExitScan")
 
   @@index([schoolId])
   @@index([classroomDeviceId])
@@ -454,6 +493,8 @@ model ClassroomAttendanceSession {
   classroomDevice   ClassroomDevice         @relation(fields: [classroomDeviceId, schoolId], references: [id, schoolId], onDelete: Restrict)
   teacher           Teacher?                @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
   records           StudentAttendanceRecord[]
+  studentPresenceStates StudentPresenceState[]
+  studentMovementRecords StudentMovementRecord[]
 
   @@unique([id, schoolId])
   @@index([schoolId])
@@ -490,12 +531,116 @@ model StudentAttendanceRecord {
   @@map("student_attendance_records")
 }
 
+model StudentPresenceState {
+  id                  String              @id @default(cuid())
+  schoolId            String              @map("school_id")
+  classroomId         String              @map("classroom_id")
+  studentId           String              @map("student_id")
+  attendanceSessionId String              @map("attendance_session_id")
+  currentState        StudentCurrentState @default(ABSENT) @map("current_state")
+  enteredAt           DateTime?           @map("entered_at")
+  exitedAt            DateTime?           @map("exited_at")
+  totalExits          Int                 @default(0) @map("total_exits")
+  lastScanEventId     String              @map("last_scan_event_id")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+  school              School              @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classroom           Classroom           @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  student             Student             @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  attendanceSession   ClassroomAttendanceSession @relation(fields: [attendanceSessionId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  lastScanEvent       RFIDScanEvent        @relation(fields: [lastScanEventId], references: [id], onDelete: Restrict)
+
+  @@unique([attendanceSessionId, studentId])
+  @@index([schoolId])
+  @@index([classroomId])
+  @@index([studentId])
+  @@index([schoolId, currentState])
+  @@map("student_presence_states")
+}
+
+model TeacherPresenceState {
+  id              String              @id @default(cuid())
+  schoolId        String              @map("school_id")
+  classroomId     String              @map("classroom_id")
+  teacherId       String              @map("teacher_id")
+  currentState    TeacherCurrentState @default(OUTSIDE_CLASSROOM) @map("current_state")
+  enteredAt       DateTime?           @map("entered_at")
+  exitedAt        DateTime?           @map("exited_at")
+  lastScanEventId String              @map("last_scan_event_id")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  school          School              @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classroom       Classroom           @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  teacher         Teacher             @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  lastScanEvent   RFIDScanEvent        @relation(fields: [lastScanEventId], references: [id], onDelete: Restrict)
+
+  @@unique([classroomId, teacherId])
+  @@index([schoolId])
+  @@index([classroomId])
+  @@index([teacherId])
+  @@index([schoolId, currentState])
+  @@map("teacher_presence_states")
+}
+
+model StudentMovementRecord {
+  id                  String         @id @default(cuid())
+  schoolId            String         @map("school_id")
+  classroomId         String         @map("classroom_id")
+  studentId           String         @map("student_id")
+  attendanceSessionId String         @map("attendance_session_id")
+  exitScanEventId     String         @map("exit_scan_event_id")
+  returnScanEventId   String?        @map("return_scan_event_id")
+  exitedAt            DateTime       @map("exited_at")
+  returnedAt          DateTime?      @map("returned_at")
+  durationMinutes     Int?           @map("duration_minutes")
+  status              MovementStatus @default(OPEN)
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  school              School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classroom           Classroom      @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  student             Student        @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  attendanceSession   ClassroomAttendanceSession @relation(fields: [attendanceSessionId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  exitScanEvent       RFIDScanEvent  @relation("StudentMovementExitScan", fields: [exitScanEventId], references: [id], onDelete: Restrict)
+  returnScanEvent     RFIDScanEvent? @relation("StudentMovementReturnScan", fields: [returnScanEventId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([classroomId])
+  @@index([studentId])
+  @@index([attendanceSessionId])
+  @@index([schoolId, status])
+  @@map("student_movement_records")
+}
+
+model TeacherMovementRecord {
+  id               String                @id @default(cuid())
+  schoolId         String                @map("school_id")
+  classroomId      String                @map("classroom_id")
+  teacherId        String                @map("teacher_id")
+  entryScanEventId String?               @map("entry_scan_event_id")
+  exitScanEventId  String?               @map("exit_scan_event_id")
+  enteredAt        DateTime?             @map("entered_at")
+  exitedAt         DateTime?             @map("exited_at")
+  status           TeacherMovementStatus @default(OUTSIDE)
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+  school           School                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classroom        Classroom             @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  teacher          Teacher               @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  entryScanEvent   RFIDScanEvent?        @relation("TeacherMovementEntryScan", fields: [entryScanEventId], references: [id], onDelete: SetNull)
+  exitScanEvent    RFIDScanEvent?        @relation("TeacherMovementExitScan", fields: [exitScanEventId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([classroomId])
+  @@index([teacherId])
+  @@index([schoolId, status])
+  @@map("teacher_movement_records")
+}
+
 model SchoolSettings {
   id                      String   @id @default(cuid())
   schoolId                String   @unique @map("school_id")
   language                Language @default(AR)
   noiseThresholdDb        Int      @default(70) @map("noise_threshold_db")
   studentExitLimitMinutes Int      @default(10) @map("student_exit_limit_minutes")
+  lateThresholdMinutes    Int      @default(10) @map("late_threshold_minutes")
   noiseAlertsEnabled      Boolean  @default(true) @map("noise_alerts_enabled")
   movementAlertsEnabled   Boolean  @default(true) @map("movement_alerts_enabled")
   attendanceAlertsEnabled Boolean  @default(true) @map("attendance_alerts_enabled")

@@ -25,6 +25,7 @@ type SettingsState = {
   language: 'AR' | 'EN'
   noiseThresholdDb: number
   studentExitLimitMinutes: number
+  lateThresholdMinutes: number
   noiseAlertsEnabled: boolean
   movementAlertsEnabled: boolean
   attendanceAlertsEnabled: boolean
@@ -38,6 +39,7 @@ const defaultSettings: SettingsState = {
   language: 'AR',
   noiseThresholdDb: 70,
   studentExitLimitMinutes: 10,
+  lateThresholdMinutes: 10,
   noiseAlertsEnabled: true,
   movementAlertsEnabled: true,
   attendanceAlertsEnabled: true,
@@ -173,6 +175,7 @@ export default function SettingsPage() {
           language: loaded.language === 'EN' ? 'EN' : 'AR',
           noiseThresholdDb: loaded.noiseThresholdDb,
           studentExitLimitMinutes: loaded.studentExitLimitMinutes,
+          lateThresholdMinutes: loaded.lateThresholdMinutes ?? 10,
           noiseAlertsEnabled: loaded.noiseAlertsEnabled,
           movementAlertsEnabled: loaded.movementAlertsEnabled,
           attendanceAlertsEnabled: loaded.attendanceAlertsEnabled,
@@ -218,6 +221,7 @@ export default function SettingsPage() {
           language: settings.language,
           noiseThresholdDb: settings.noiseThresholdDb,
           studentExitLimitMinutes: settings.studentExitLimitMinutes,
+          lateThresholdMinutes: settings.lateThresholdMinutes,
           noiseAlertsEnabled: settings.noiseAlertsEnabled,
           movementAlertsEnabled: settings.movementAlertsEnabled,
           attendanceAlertsEnabled: settings.attendanceAlertsEnabled,
@@ -321,6 +325,25 @@ export default function SettingsPage() {
                   max={30}
                   value={settings.studentExitLimitMinutes}
                   onChange={(e) => update('studentExitLimitMinutes', Number(e.target.value))}
+                  className="w-full accent-[var(--accent)]"
+                />
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    <Users className="size-4 text-muted-foreground" />
+                    {t('settings.lateThreshold')}
+                  </span>
+                  <Badge variant="accent">
+                    {settings.lateThresholdMinutes} {t('settings.minutes')}
+                  </Badge>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={60}
+                  value={settings.lateThresholdMinutes}
+                  onChange={(e) => update('lateThresholdMinutes', Number(e.target.value))}
                   className="w-full accent-[var(--accent)]"
                 />
               </div>

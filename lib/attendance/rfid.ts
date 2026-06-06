@@ -4,6 +4,7 @@ import type {
 import type {
   RFIDScanDirection,
   RFIDScanStatus,
+  StudentAttendanceStatus,
 } from '@prisma/client'
 import { assertSameSchool } from '@/lib/academic/access'
 import { prisma } from '@/lib/prisma'
@@ -113,6 +114,225 @@ export async function findOrCreateOpenSession({
 
   await ensureAttendanceRecords(created.id, schoolId, classroomId)
   return created
+}
+
+async function attendanceStatusForEntry(schoolId: string, openedAt: Date, scannedAt: Date): Promise<StudentAttendanceStatus> {
+  const settings = await prisma.schoolSettings.findUnique({
+    where: { schoolId },
+    select: { lateThresholdMinutes: true },
+  })
+  const threshold = settings?.lateThresholdMinutes ?? 10
+  const lateAt = openedAt.getTime() + threshold * 60_000
+  return scannedAt.getTime() > lateAt ? 'LATE' : 'PRESENT'
+}
+
+async function updateStudentPresenceFromScan({
+  eventId,
+  schoolId,
+  classroomId,
+  studentId,
+  attendanceSessionId,
+  scanDirection,
+  scannedAt,
+}: {
+  eventId: string
+  schoolId: string
+  classroomId: string
+  studentId: string
+  attendanceSessionId: string
+  scanDirection: RFIDScanDirection
+  scannedAt: Date
+}) {
+  if (scanDirection === 'ENTRY') {
+    const openMovement = await prisma.studentMovementRecord.findFirst({
+      where: {
+        schoolId,
+        classroomId,
+        studentId,
+        attendanceSessionId,
+        status: 'OPEN',
+      },
+      orderBy: { exitedAt: 'desc' },
+    })
+
+    if (openMovement) {
+      await prisma.studentMovementRecord.update({
+        where: { id: openMovement.id },
+        data: {
+          returnScanEventId: eventId,
+          returnedAt: scannedAt,
+          durationMinutes: Math.max(0, Math.round((scannedAt.getTime() - openMovement.exitedAt.getTime()) / 60_000)),
+          status: 'CLOSED',
+        },
+      })
+    }
+
+    await prisma.studentPresenceState.upsert({
+      where: {
+        attendanceSessionId_studentId: {
+          attendanceSessionId,
+          studentId,
+        },
+      },
+      update: {
+        currentState: 'INSIDE_CLASSROOM',
+        enteredAt: scannedAt,
+        lastScanEventId: eventId,
+      },
+      create: {
+        schoolId,
+        classroomId,
+        studentId,
+        attendanceSessionId,
+        currentState: 'INSIDE_CLASSROOM',
+        enteredAt: scannedAt,
+        totalExits: 0,
+        lastScanEventId: eventId,
+      },
+    })
+  } else if (scanDirection === 'EXIT') {
+    await prisma.studentMovementRecord.create({
+      data: {
+        schoolId,
+        classroomId,
+        studentId,
+        attendanceSessionId,
+        exitScanEventId: eventId,
+        exitedAt: scannedAt,
+        status: 'OPEN',
+      },
+    })
+
+    await prisma.studentPresenceState.upsert({
+      where: {
+        attendanceSessionId_studentId: {
+          attendanceSessionId,
+          studentId,
+        },
+      },
+      update: {
+        currentState: 'OUTSIDE_CLASSROOM',
+        exitedAt: scannedAt,
+        totalExits: { increment: 1 },
+        lastScanEventId: eventId,
+      },
+      create: {
+        schoolId,
+        classroomId,
+        studentId,
+        attendanceSessionId,
+        currentState: 'OUTSIDE_CLASSROOM',
+        exitedAt: scannedAt,
+        totalExits: 1,
+        lastScanEventId: eventId,
+      },
+    })
+  }
+}
+
+async function updateTeacherPresenceFromScan({
+  eventId,
+  schoolId,
+  classroomId,
+  teacherId,
+  scanDirection,
+  scannedAt,
+}: {
+  eventId: string
+  schoolId: string
+  classroomId: string
+  teacherId: string
+  scanDirection: RFIDScanDirection
+  scannedAt: Date
+}) {
+  if (scanDirection === 'ENTRY') {
+    await prisma.teacherMovementRecord.create({
+      data: {
+        schoolId,
+        classroomId,
+        teacherId,
+        entryScanEventId: eventId,
+        enteredAt: scannedAt,
+        status: 'INSIDE',
+      },
+    })
+
+    await prisma.teacherPresenceState.upsert({
+      where: {
+        classroomId_teacherId: {
+          classroomId,
+          teacherId,
+        },
+      },
+      update: {
+        currentState: 'INSIDE_CLASSROOM',
+        enteredAt: scannedAt,
+        lastScanEventId: eventId,
+      },
+      create: {
+        schoolId,
+        classroomId,
+        teacherId,
+        currentState: 'INSIDE_CLASSROOM',
+        enteredAt: scannedAt,
+        lastScanEventId: eventId,
+      },
+    })
+  } else if (scanDirection === 'EXIT') {
+    const openTeacherMovement = await prisma.teacherMovementRecord.findFirst({
+      where: {
+        schoolId,
+        classroomId,
+        teacherId,
+        status: 'INSIDE',
+      },
+      orderBy: { enteredAt: 'desc' },
+    })
+
+    if (openTeacherMovement) {
+      await prisma.teacherMovementRecord.update({
+        where: { id: openTeacherMovement.id },
+        data: {
+          exitScanEventId: eventId,
+          exitedAt: scannedAt,
+          status: 'OUTSIDE',
+        },
+      })
+    } else {
+      await prisma.teacherMovementRecord.create({
+        data: {
+          schoolId,
+          classroomId,
+          teacherId,
+          exitScanEventId: eventId,
+          exitedAt: scannedAt,
+          status: 'OUTSIDE',
+        },
+      })
+    }
+
+    await prisma.teacherPresenceState.upsert({
+      where: {
+        classroomId_teacherId: {
+          classroomId,
+          teacherId,
+        },
+      },
+      update: {
+        currentState: 'OUTSIDE_CLASSROOM',
+        exitedAt: scannedAt,
+        lastScanEventId: eventId,
+      },
+      create: {
+        schoolId,
+        classroomId,
+        teacherId,
+        currentState: 'OUTSIDE_CLASSROOM',
+        exitedAt: scannedAt,
+        lastScanEventId: eventId,
+      },
+    })
+  }
 }
 
 async function createScanEvent({
@@ -281,7 +501,7 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
     return { event, scanStatus, duplicate: false, attendanceSession: null, attendanceRecord: null }
   }
 
-  if (actorType === 'TEACHER' && teacherId && scanDirection === 'ENTRY') {
+  if (actorType === 'TEACHER' && teacherId) {
     const attendanceSession = await prisma.classroomAttendanceSession.findFirst({
       where: {
         schoolId: device.schoolId,
@@ -290,7 +510,16 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
       },
     })
 
-    if (attendanceSession && !attendanceSession.teacherId) {
+    await updateTeacherPresenceFromScan({
+      eventId: event.id,
+      schoolId: device.schoolId,
+      classroomId: device.classroomId,
+      teacherId,
+      scanDirection,
+      scannedAt,
+    })
+
+    if (scanDirection === 'ENTRY' && attendanceSession && !attendanceSession.teacherId) {
       const updatedSession = await prisma.classroomAttendanceSession.update({
         where: { id: attendanceSession.id },
         data: { teacherId },
@@ -308,6 +537,7 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
       classroomDeviceId: device.id,
       at: scannedAt,
     })
+    const entryStatus = await attendanceStatusForEntry(device.schoolId, attendanceSession.openedAt, scannedAt)
 
     const attendanceRecord = await prisma.studentAttendanceRecord.upsert({
       where: {
@@ -317,7 +547,7 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
         },
       },
       update: {
-        status: scanDirection === 'ENTRY' ? 'PRESENT' : undefined,
+        status: scanDirection === 'ENTRY' ? entryStatus : undefined,
         firstEntryAt: scanDirection === 'ENTRY' ? scannedAt : undefined,
         lastExitAt: scanDirection === 'EXIT' ? scannedAt : undefined,
         scanCount: { increment: 1 },
@@ -327,11 +557,21 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
         attendanceSessionId: attendanceSession.id,
         classroomId: device.classroomId,
         studentId,
-        status: scanDirection === 'ENTRY' ? 'PRESENT' : 'ABSENT',
+        status: scanDirection === 'ENTRY' ? entryStatus : 'ABSENT',
         firstEntryAt: scanDirection === 'ENTRY' ? scannedAt : null,
         lastExitAt: scanDirection === 'EXIT' ? scannedAt : null,
         scanCount: 1,
       },
+    })
+
+    await updateStudentPresenceFromScan({
+      eventId: event.id,
+      schoolId: device.schoolId,
+      classroomId: device.classroomId,
+      studentId,
+      attendanceSessionId: attendanceSession.id,
+      scanDirection,
+      scannedAt,
     })
 
     return { event, scanStatus, duplicate: false, attendanceSession, attendanceRecord }
