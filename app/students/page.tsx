@@ -9,6 +9,8 @@ import { Table, THead, TR, TH, TD } from '@/components/ui/table'
 import { useLevel } from '@/components/level-provider'
 import { levelMap, type Level } from '@/lib/mock-data'
 import { Search, X, LogIn, LogOut, Undo2 } from 'lucide-react'
+import { useLanguage } from '@/components/language-provider'
+import { levelNameKey, minutes, percent } from '@/lib/i18n/ui'
 
 type ApiStudent = {
   id: string
@@ -33,10 +35,10 @@ type Student = {
   status: 'inside' | 'outside' | 'absent'
 }
 
-const statusMeta: Record<Student['status'], { variant: 'success' | 'warning' | 'danger'; label: string }> = {
-  inside: { variant: 'success', label: 'داخل الفصل' },
-  outside: { variant: 'warning', label: 'خارج الفصل' },
-  absent: { variant: 'danger', label: 'غائب' },
+const statusMeta: Record<Student['status'], { variant: 'success' | 'warning' | 'danger'; key: string }> = {
+  inside: { variant: 'success', key: 'students.inside' },
+  outside: { variant: 'warning', key: 'students.outside' },
+  absent: { variant: 'danger', key: 'students.absent' },
 }
 
 const levelTypeParam: Record<Level, string> = {
@@ -72,6 +74,7 @@ function projectStudent(student: ApiStudent, index: number, level: Level): Stude
 
 export default function StudentsPage() {
   const { level } = useLevel()
+  const { t } = useLanguage()
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<Student | null>(null)
   const [apiStudents, setApiStudents] = useState<ApiStudent[]>([])
@@ -119,15 +122,15 @@ export default function StudentsPage() {
 
   return (
     <DashboardShell
-      title="الطلاب"
-      subtitle={`${students.length} طالباً · ${lvl.ar}`}
+      title={t('students.title')}
+      subtitle={`${students.length} ${t('students.subtitleSuffix')} · ${t(levelNameKey[level])}`}
     >
       <Card className="p-0">
         <div className="p-4">
           <div className="relative w-full lg:max-w-sm">
             <Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="ابحث بالاسم، الفصل، أو رقم البطاقة..."
+              placeholder={t('students.search')}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               className="pr-9"
@@ -138,14 +141,14 @@ export default function StudentsPage() {
         <Table>
           <THead>
             <TR className="hover:bg-transparent">
-              <TH>الطالب</TH>
-              <TH>رقم البطاقة</TH>
-              <TH>الفصل</TH>
-              <TH>نسبة الحضور</TH>
-              <TH>مرات الخروج</TH>
-              <TH>متوسط مدة الخروج</TH>
-              <TH>آخر حركة</TH>
-              <TH>الحالة</TH>
+              <TH>{t('attendance.student')}</TH>
+              <TH>{t('students.cardNumber')}</TH>
+              <TH>{t('classrooms.classroom')}</TH>
+              <TH>{t('teachers.attendanceRate')}</TH>
+              <TH>{t('students.exitTimes')}</TH>
+              <TH>{t('students.avgExitDuration')}</TH>
+              <TH>{t('students.lastMovement')}</TH>
+              <TH>{t('common.status')}</TH>
             </TR>
           </THead>
           <tbody>
@@ -160,7 +163,7 @@ export default function StudentsPage() {
                 <TD className="text-muted-foreground">{s.classroom}</TD>
                 <TD>
                   <span className="flex items-center gap-2">
-                    <span className="tabular-nums font-semibold">{s.attendanceRate}٪</span>
+                    <span className="tabular-nums font-semibold">{percent(s.attendanceRate, t)}</span>
                     <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                       <span
                         className="block h-full rounded-full"
@@ -173,9 +176,9 @@ export default function StudentsPage() {
                   </span>
                 </TD>
                 <TD className="tabular-nums">{s.exits}</TD>
-                <TD className="tabular-nums">{s.avgExitDuration} د</TD>
+                <TD className="tabular-nums">{minutes(s.avgExitDuration, t)}</TD>
                 <TD className="text-xs text-muted-foreground">{s.lastMovement}</TD>
-                <TD><Badge variant={statusMeta[s.status].variant}>{statusMeta[s.status].label}</Badge></TD>
+                <TD><Badge variant={statusMeta[s.status].variant}>{t(statusMeta[s.status].key)}</Badge></TD>
               </TR>
             ))}
           </tbody>
@@ -196,18 +199,19 @@ function StudentModal({
   student: Student
   onClose: () => void
 }) {
+  const { t } = useLanguage()
   const movement = [
-    { type: 'دخول', time: '07:22 ص', icon: LogIn, color: 'text-success' },
-    { type: 'خروج', time: '10:05 ص', icon: LogOut, color: 'text-destructive' },
-    { type: 'عودة', time: '10:14 ص', icon: Undo2, color: 'text-accent' },
-    { type: 'خروج', time: '11:40 ص', icon: LogOut, color: 'text-destructive' },
+    { typeKey: 'movement.entry', time: '07:22', icon: LogIn, color: 'text-success' },
+    { typeKey: 'movement.exit', time: '10:05', icon: LogOut, color: 'text-destructive' },
+    { typeKey: 'movement.return', time: '10:14', icon: Undo2, color: 'text-accent' },
+    { typeKey: 'movement.exit', time: '11:40', icon: LogOut, color: 'text-destructive' },
   ]
   const attendance = [
-    { day: 'الأحد', status: 'حاضر', v: 'success' as const },
-    { day: 'الاثنين', status: 'حاضر', v: 'success' as const },
-    { day: 'الثلاثاء', status: 'متأخر', v: 'warning' as const },
-    { day: 'الأربعاء', status: 'حاضر', v: 'success' as const },
-    { day: 'الخميس', status: 'غائب', v: 'danger' as const },
+    { dayKey: 'days.sunday', statusKey: 'classrooms.present', v: 'success' as const },
+    { dayKey: 'days.monday', statusKey: 'classrooms.present', v: 'success' as const },
+    { dayKey: 'days.tuesday', statusKey: 'movement.late', v: 'warning' as const },
+    { dayKey: 'days.wednesday', statusKey: 'classrooms.present', v: 'success' as const },
+    { dayKey: 'days.thursday', statusKey: 'classrooms.absent', v: 'danger' as const },
   ]
 
   return (
@@ -230,36 +234,36 @@ function StudentModal({
               <p className="font-mono text-xs text-muted-foreground" dir="ltr">{student.cardId}</p>
             </div>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted" aria-label="إغلاق">
+          <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted" aria-label={t('common.close')}>
             <X className="size-5" />
           </button>
         </div>
 
         <div className="mt-5 grid grid-cols-3 gap-2">
-          <Stat label="نسبة الحضور" value={`${student.attendanceRate}٪`} />
-          <Stat label="مرات الخروج" value={String(student.exits)} />
-          <Stat label="متوسط الخروج" value={`${student.avgExitDuration} د`} />
+          <Stat label={t('teachers.attendanceRate')} value={percent(student.attendanceRate, t)} />
+          <Stat label={t('students.exitTimes')} value={String(student.exits)} />
+          <Stat label={t('students.avgExitDuration')} value={minutes(student.avgExitDuration, t)} />
         </div>
 
-        <Section title="سجل الحضور الأسبوعي">
+        <Section title={t('students.weeklyAttendance')}>
           <div className="grid grid-cols-5 gap-2">
             {attendance.map((a) => (
-              <div key={a.day} className="rounded-xl bg-muted/50 p-2 text-center">
-                <p className="text-[11px] text-muted-foreground">{a.day}</p>
-                <Badge variant={a.v} className="mt-1.5">{a.status}</Badge>
+              <div key={a.dayKey} className="rounded-xl bg-muted/50 p-2 text-center">
+                <p className="text-[11px] text-muted-foreground">{t(a.dayKey)}</p>
+                <Badge variant={a.v} className="mt-1.5">{t(a.statusKey)}</Badge>
               </div>
             ))}
           </div>
         </Section>
 
-        <Section title="سجل الخروج والعودة">
+        <Section title={t('students.exitReturnLog')}>
           <div className="space-y-2">
             {movement.map((m, i) => {
               const Icon = m.icon
               return (
                 <div key={i} className="flex items-center justify-between rounded-xl bg-muted/40 px-3.5 py-2.5">
                   <span className={`flex items-center gap-2 text-sm font-semibold ${m.color}`}>
-                    <Icon className="size-4" /> {m.type}
+                    <Icon className="size-4" /> {t(m.typeKey)}
                   </span>
                   <span className="text-xs text-muted-foreground tabular-nums">{m.time}</span>
                 </div>
@@ -268,18 +272,17 @@ function StudentModal({
           </div>
         </Section>
 
-        <Section title="مؤشرات الانضباط">
+        <Section title={t('students.disciplineIndicators')}>
           <div className="space-y-2.5">
-            <Indicator label="الالتزام بالحضور" value={student.attendanceRate} />
-            <Indicator label="الاستقرار داخل الفصل" value={Math.max(40, 100 - student.exits * 10)} />
-            <Indicator label="التفاعل العام" value={82} />
+            <Indicator label={t('students.attendanceCommitment')} value={student.attendanceRate} />
+            <Indicator label={t('students.classStability')} value={Math.max(40, 100 - student.exits * 10)} />
+            <Indicator label={t('students.generalEngagement')} value={82} />
           </div>
         </Section>
 
-        <Section title="ملاحظات الإدارة">
+        <Section title={t('students.adminNotes')}>
           <p className="rounded-xl bg-muted/50 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-            طالب منتظم بشكل عام. يُنصح بمتابعة معدل الخروج خلال الحصص الأخيرة من
-            اليوم الدراسي.
+            {t('students.adminNoteText')}
           </p>
         </Section>
       </div>

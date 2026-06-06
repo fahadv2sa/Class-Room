@@ -7,6 +7,8 @@ import Link from 'next/link'
 import { useLevel } from '@/components/level-provider'
 import { levels, levelMap, getAlerts } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/components/language-provider'
+import { levelNameKey, levelShortKey } from '@/lib/i18n/ui'
 
 export function Topbar({
   title,
@@ -18,6 +20,7 @@ export function Topbar({
   onMenu: () => void
 }) {
   const { level, setLevel, school } = useLevel()
+  const { t } = useLanguage()
   const [menuOpen, setMenuOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -37,7 +40,7 @@ export function Topbar({
       <button
         onClick={onMenu}
         className="rounded-xl p-2 text-muted-foreground hover:bg-muted lg:hidden"
-        aria-label="فتح القائمة"
+        aria-label={t('common.openMenu')}
       >
         <Menu className="size-5" />
       </button>
@@ -55,7 +58,7 @@ export function Topbar({
 
       <div className="relative hidden lg:block">
         <Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="بحث سريع..." className="w-56 pr-9 xl:w-64" aria-label="بحث" />
+        <Input placeholder={t('common.quickSearch')} className="w-56 pr-9 xl:w-64" aria-label={t('common.search')} />
       </div>
 
       {/* Level switcher */}
@@ -69,7 +72,7 @@ export function Topbar({
           <span className="flex size-6 items-center justify-center rounded-md bg-accent/15 font-mono text-xs font-bold text-accent">
             {current?.code}
           </span>
-          <span className="hidden sm:inline">{current?.short}</span>
+          <span className="hidden sm:inline">{level ? t(levelShortKey[level]) : current?.short}</span>
           <ChevronDown className="size-4 text-muted-foreground" />
         </button>
 
@@ -110,7 +113,7 @@ export function Topbar({
                     {l.code}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold leading-tight">{l.ar}</p>
+                    <p className="font-semibold leading-tight">{t(levelNameKey[l.id])}</p>
                     <p className="text-[11px] text-muted-foreground" dir="ltr">
                       {l.en}
                     </p>
@@ -126,7 +129,7 @@ export function Topbar({
       <Link
         href="/alerts"
         className="relative rounded-xl border border-border bg-card p-2.5 text-muted-foreground transition-colors hover:text-foreground"
-        aria-label="التنبيهات"
+        aria-label={t('sidebar.alerts')}
       >
         <Bell className="size-5" />
         {activeAlerts > 0 && (

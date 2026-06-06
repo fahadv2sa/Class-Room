@@ -1,5 +1,8 @@
+'use client'
+
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/components/language-provider'
 import {
   TrendingUp,
   AlertTriangle,
@@ -21,6 +24,7 @@ const meta: Record<
 }
 
 export function AIInsights({ insights }: { insights: Insight[] }) {
+  const { t } = useLanguage()
   return (
     <Card className="overflow-hidden border-accent/20 bg-gradient-to-bl from-accent/[0.04] to-transparent">
       <div className="flex items-center gap-3 border-b border-border/60 p-5">
@@ -29,15 +33,15 @@ export function AIInsights({ insights }: { insights: Insight[] }) {
         </div>
         <div>
           <h3 className="text-base font-extrabold tracking-tight">
-            مساعد المدير الذكي
+            {t('ai.title')}
           </h3>
           <p className="text-xs text-muted-foreground">
-            رؤى وتوصيات مبنية على بيانات المدرسة
+            {t('ai.subtitle')}
           </p>
         </div>
         <span className="me-auto inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-bold text-accent">
           <span className="size-1.5 rounded-full bg-accent live-dot" />
-          مباشر
+          {t('common.live')}
         </span>
       </div>
       <div className="grid gap-3 p-5 sm:grid-cols-2">

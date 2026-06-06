@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Segmented } from '@/components/ui/segmented'
 import { useLevel } from '@/components/level-provider'
 import { getAlerts, severityMeta, levelMap } from '@/lib/mock-data'
+import { useLanguage } from '@/components/language-provider'
+import { withLevel } from '@/lib/i18n/ui'
 import {
   Volume2,
   Footprints,
@@ -28,13 +30,14 @@ const typeIcon: Record<string, typeof Volume2> = {
 }
 
 const filters = [
-  { value: 'all', label: 'الكل' },
-  { value: 'active', label: 'نشطة' },
-  { value: 'resolved', label: 'تم حلها' },
+  { value: 'all', labelKey: 'common.all' },
+  { value: 'active', labelKey: 'alerts.filterActive' },
+  { value: 'resolved', labelKey: 'alerts.filterResolved' },
 ]
 
 export default function AlertsPage() {
   const { level } = useLevel()
+  const { t } = useLanguage()
   const [filter, setFilter] = useState('all')
   const [resolvedIds, setResolvedIds] = useState<string[]>([])
 
@@ -64,32 +67,32 @@ export default function AlertsPage() {
 
   return (
     <DashboardShell
-      title="التنبيهات"
-      subtitle={`مركز التنبيهات اللحظية · ${lvl.ar}`}
+      title={t('alerts.title')}
+      subtitle={withLevel('alerts.subtitle', level, t)}
     >
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="تنبيهات نشطة" value={active.length} icon={Bell} tone="danger" />
-          <StatCard label="عاجلة / مرتفعة" value={urgent.length} icon={AlertTriangle} tone="warning" />
-          <StatCard label="تم حلها اليوم" value={data.filter((a) => a.resolved).length} icon={CheckCircle2} tone="success" />
-          <StatCard label="متوسط زمن الاستجابة" value="6" unit="دقائق" icon={Clock} tone="accent" />
+          <StatCard label={t('alerts.active')} value={active.length} icon={Bell} tone="danger" />
+          <StatCard label={t('alerts.urgentHigh')} value={urgent.length} icon={AlertTriangle} tone="warning" />
+          <StatCard label={t('alerts.resolvedToday')} value={data.filter((a) => a.resolved).length} icon={CheckCircle2} tone="success" />
+          <StatCard label={t('alerts.avgResponse')} value="6" unit={t('settings.minutes')} icon={Clock} tone="accent" />
         </div>
 
         <Card className="p-0">
           <div className="flex flex-col gap-3 border-b border-border/60 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-base font-extrabold tracking-tight">قائمة التنبيهات</h3>
+              <h3 className="text-base font-extrabold tracking-tight">{t('alerts.list')}</h3>
               <p className="text-xs text-muted-foreground">
-                {filtered.length} تنبيه
+                {filtered.length} {t('alerts.count')}
               </p>
             </div>
-            <Segmented options={filters} value={filter} onChange={setFilter} />
+            <Segmented options={filters.map((f) => ({ value: f.value, label: t(f.labelKey) }))} value={filter} onChange={setFilter} />
           </div>
 
           <div className="divide-y divide-border/60">
             {filtered.length === 0 && (
               <p className="py-14 text-center text-sm text-muted-foreground">
-                لا توجد تنبيهات في هذا التصنيف.
+                {t('alerts.empty')}
               </p>
             )}
             {filtered.map((a) => {
@@ -117,7 +120,7 @@ export default function AlertsPage() {
                       <Badge variant={sev.badge}>{sev.label}</Badge>
                       {a.resolved && (
                         <Badge variant="success">
-                          <CheckCircle2 className="size-3" /> تم الحل
+                          <CheckCircle2 className="size-3" /> {t('alerts.resolved')}
                         </Badge>
                       )}
                     </div>
@@ -132,7 +135,7 @@ export default function AlertsPage() {
                       onClick={() => setResolvedIds((p) => [...p, a.id])}
                       className="shrink-0"
                     >
-                      <CheckCircle2 className="size-4" /> تعليم كمحلول
+                      <CheckCircle2 className="size-4" /> {t('alerts.markResolved')}
                     </Button>
                   )}
                 </div>

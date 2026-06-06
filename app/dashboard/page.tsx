@@ -14,15 +14,15 @@ import {
 } from '@/components/charts'
 import { useLevel } from '@/components/level-provider'
 import {
-  levelMap,
   getClassrooms,
   getKpis,
   getNoiseByHour,
   getAttendanceByClass,
   getNoiseByClass,
   getMovementByHour,
-  getAiInsights,
 } from '@/lib/mock-data'
+import { useLanguage } from '@/components/language-provider'
+import { percent, withLevel } from '@/lib/i18n/ui'
 import {
   Users,
   School,
@@ -34,34 +34,49 @@ import {
 
 export default function DashboardPage() {
   const { level } = useLevel()
+  const { t } = useLanguage()
   if (!level) return null
 
-  const lvl = levelMap[level]
   const classrooms = getClassrooms(level)
   const kpis = getKpis(level)
   const noiseByHour = getNoiseByHour(level)
   const attendanceByClass = getAttendanceByClass(level)
   const noiseByClass = getNoiseByClass(level)
   const movementByHour = getMovementByHour(level)
-  const insights = getAiInsights(level)
+  const loudestClass = noiseByClass[0]
+  const quietClass = [...noiseByClass].reverse()[0]
+  const insights = [
+    {
+      id: 'ai1',
+      type: 'trend',
+      title: t('noise.highest'),
+      text: `${t('classrooms.classroom')} ${loudestClass?.name}: ${loudestClass?.noise} dB`,
+    },
+    {
+      id: 'ai2',
+      type: 'opportunity',
+      title: t('dashboard.quietestClasses'),
+      text: `${t('classrooms.classroom')} ${quietClass?.name}: ${quietClass?.noise} dB`,
+    },
+  ]
 
   const quietest = [...noiseByClass].reverse().slice(0, 3)
   const loudest = noiseByClass.slice(0, 3)
 
   return (
     <DashboardShell
-      title="لوحة التحكم"
-      subtitle={`نظرة عامة مباشرة · ${lvl.ar}`}
+      title={t('dashboard.title')}
+      subtitle={withLevel('dashboard.subtitle', level, t)}
     >
       <div className="space-y-6">
         {/* KPIs */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
-          <StatCard label="إجمالي الطلاب" value={kpis.totalStudents} icon={Users} tone="accent" trend={{ value: '3٪', up: true, good: true }} />
-          <StatCard label="الفصول النشطة الآن" value={kpis.activeClasses} unit={`/ ${kpis.totalClasses}`} icon={School} tone="success" />
-          <StatCard label="متوسط الحضور اليوم" value={`${kpis.avgAttendance}٪`} icon={ClipboardCheck} tone="success" trend={{ value: '2٪', up: true, good: true }} />
-          <StatCard label="متوسط الضوضاء اليوم" value={kpis.avgNoise} unit="dB" icon={Volume2} tone="warning" trend={{ value: '5٪', up: true, good: false }} />
-          <StatCard label="حالات الخروج الحالية" value={kpis.currentlyOutside} icon={LogOut} tone="warning" />
-          <StatCard label="التنبيهات النشطة" value={kpis.activeAlerts} icon={Bell} tone="danger" />
+          <StatCard label={t('dashboard.totalStudents')} value={kpis.totalStudents} icon={Users} tone="accent" trend={{ value: percent(3, t), up: true, good: true }} />
+          <StatCard label={t('dashboard.activeClasses')} value={kpis.activeClasses} unit={`/ ${kpis.totalClasses}`} icon={School} tone="success" />
+          <StatCard label={t('dashboard.avgAttendance')} value={percent(kpis.avgAttendance, t)} icon={ClipboardCheck} tone="success" trend={{ value: percent(2, t), up: true, good: true }} />
+          <StatCard label={t('dashboard.avgNoise')} value={kpis.avgNoise} unit="dB" icon={Volume2} tone="warning" trend={{ value: percent(5, t), up: true, good: false }} />
+          <StatCard label={t('dashboard.currentExits')} value={kpis.currentlyOutside} icon={LogOut} tone="warning" />
+          <StatCard label={t('dashboard.activeAlerts')} value={kpis.activeAlerts} icon={Bell} tone="danger" />
         </div>
 
         {/* AI Insights */}
@@ -72,10 +87,10 @@ export default function DashboardPage() {
           <Card className="lg:col-span-2">
             <CardHeader className="flex-row items-center justify-between">
               <div>
-                <CardTitle>معدل الضوضاء خلال اليوم</CardTitle>
+                <CardTitle>{t('dashboard.noiseDuringDay')}</CardTitle>
               </div>
               <Badge variant="accent">
-                <span className="size-1.5 rounded-full bg-accent live-dot" /> مباشر
+                <span className="size-1.5 rounded-full bg-accent live-dot" /> {t('common.live')}
               </Badge>
             </CardHeader>
             <CardContent>
@@ -85,7 +100,7 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>الحضور حسب الفصول</CardTitle>
+              <CardTitle>{t('dashboard.attendanceByClass')}</CardTitle>
             </CardHeader>
             <CardContent>
               <AttendanceBarChart data={attendanceByClass} />
@@ -96,7 +111,7 @@ export default function DashboardPage() {
         <div className="grid gap-6 lg:grid-cols-3">
           <Card>
             <CardHeader>
-              <CardTitle>ترتيب الفصول حسب الضوضاء</CardTitle>
+              <CardTitle>{t('dashboard.noiseRank')}</CardTitle>
             </CardHeader>
             <CardContent>
               <NoiseRankBarChart data={noiseByClass.slice(0, 8)} />
@@ -105,7 +120,7 @@ export default function DashboardPage() {
 
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>حركة الخروج والعودة حسب الساعة</CardTitle>
+              <CardTitle>{t('dashboard.movementByHour')}</CardTitle>
             </CardHeader>
             <CardContent>
               <MovementLineChart data={movementByHour} />
@@ -115,19 +130,19 @@ export default function DashboardPage() {
 
         {/* Quietest / loudest */}
         <div className="grid gap-6 md:grid-cols-2">
-          <RankList title="أكثر الفصول هدوءاً" items={quietest} tone="success" />
-          <RankList title="أكثر الفصول إزعاجاً" items={loudest} tone="danger" />
+          <RankList title={t('dashboard.quietestClasses')} items={quietest} tone="success" />
+          <RankList title={t('dashboard.loudestClasses')} items={loudest} tone="danger" />
         </div>
 
         {/* Live classroom grid */}
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-extrabold tracking-tight">
-              الحالة المباشرة للفصول
+              {t('dashboard.liveClassrooms')}
             </h2>
             <Badge variant="accent">
               <span className="size-1.5 rounded-full bg-accent live-dot" />
-              تحديث لحظي
+              {t('common.liveUpdate')}
             </Badge>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

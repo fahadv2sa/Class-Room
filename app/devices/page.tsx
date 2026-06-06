@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Segmented } from '@/components/ui/segmented'
 import { useLevel } from '@/components/level-provider'
 import { getDevices, levelMap, type Device } from '@/lib/mock-data'
+import { useLanguage } from '@/components/language-provider'
+import { percent, withLevel } from '@/lib/i18n/ui'
 import {
   Cpu,
   Wifi,
@@ -23,22 +25,23 @@ import {
 
 const sensorMeta: Record<
   Device['soundSensor'],
-  { icon: typeof CircleCheck; tone: string; label: string }
+  { icon: typeof CircleCheck; tone: string; labelKey: string }
 > = {
-  ok: { icon: CircleCheck, tone: 'text-success', label: 'يعمل' },
-  warn: { icon: CircleAlert, tone: 'text-[#b45309]', label: 'تحذير' },
-  fail: { icon: CircleX, tone: 'text-destructive', label: 'عطل' },
+  ok: { icon: CircleCheck, tone: 'text-success', labelKey: 'devices.working' },
+  warn: { icon: CircleAlert, tone: 'text-[#b45309]', labelKey: 'devices.warning' },
+  fail: { icon: CircleX, tone: 'text-destructive', labelKey: 'devices.fault' },
 }
 
 const filters = [
-  { value: 'all', label: 'الكل' },
-  { value: 'online', label: 'متصل' },
-  { value: 'offline', label: 'غير متصل' },
+  { value: 'all', labelKey: 'common.all' },
+  { value: 'online', labelKey: 'classrooms.online' },
+  { value: 'offline', labelKey: 'classrooms.offline' },
 ]
 
 export default function DevicesPage() {
   const { level } = useLevel()
   const [filter, setFilter] = useState('all')
+  const { t } = useLanguage()
 
   const lvl = level ? levelMap[level] : null
   const devices = level ? getDevices(level) : []
@@ -56,20 +59,20 @@ export default function DevicesPage() {
 
   return (
     <DashboardShell
-      title="الأجهزة"
-      subtitle={`حالة أجهزة الفصول الذكية · ${lvl.ar}`}
+      title={t('devices.title')}
+      subtitle={withLevel('devices.subtitle', level, t)}
     >
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="إجمالي الأجهزة" value={devices.length} icon={Cpu} tone="accent" />
-          <StatCard label="متصلة الآن" value={online} unit={`/ ${devices.length}`} icon={Wifi} tone="success" />
-          <StatCard label="بطارية منخفضة" value={lowBattery} icon={BatteryLow} tone="warning" />
-          <StatCard label="تحتاج صيانة" value={faulty} icon={CircleAlert} tone="danger" />
+          <StatCard label={t('devices.total')} value={devices.length} icon={Cpu} tone="accent" />
+          <StatCard label={t('devices.onlineNow')} value={online} unit={`/ ${devices.length}`} icon={Wifi} tone="success" />
+          <StatCard label={t('devices.lowBattery')} value={lowBattery} icon={BatteryLow} tone="warning" />
+          <StatCard label={t('devices.needsMaintenance')} value={faulty} icon={CircleAlert} tone="danger" />
         </div>
 
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-extrabold tracking-tight">قائمة الأجهزة</h2>
-          <Segmented options={filters} value={filter} onChange={setFilter} />
+          <h2 className="text-lg font-extrabold tracking-tight">{t('devices.list')}</h2>
+          <Segmented options={filters.map((f) => ({ value: f.value, label: t(f.labelKey) }))} value={filter} onChange={setFilter} />
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -100,9 +103,9 @@ export default function DevicesPage() {
                     </div>
                   </div>
                   {d.status === 'online' ? (
-                    <Badge variant="success"><Wifi className="size-3" /> متصل</Badge>
+                    <Badge variant="success"><Wifi className="size-3" /> {t('classrooms.online')}</Badge>
                   ) : (
-                    <Badge variant="danger"><WifiOff className="size-3" /> غير متصل</Badge>
+                    <Badge variant="danger"><WifiOff className="size-3" /> {t('classrooms.offline')}</Badge>
                   )}
                 </div>
 
@@ -110,7 +113,7 @@ export default function DevicesPage() {
                   <Row
                     icon={lowBat ? BatteryLow : BatteryFull}
                     iconTone={lowBat ? 'text-destructive' : 'text-success'}
-                    label="البطارية"
+                    label={t('devices.battery')}
                   >
                     <span className="flex items-center gap-2">
                       <span className="h-1.5 w-16 overflow-hidden rounded-full bg-border">
@@ -122,23 +125,23 @@ export default function DevicesPage() {
                           }}
                         />
                       </span>
-                      <span className="font-bold tabular-nums">{d.battery}٪</span>
+                      <span className="font-bold tabular-nums">{percent(d.battery, t)}</span>
                     </span>
                   </Row>
-                  <Row icon={Volume2} iconTone="text-muted-foreground" label="حساس الصوت">
+                  <Row icon={Volume2} iconTone="text-muted-foreground" label={t('devices.soundSensor')}>
                     <span className={`flex items-center gap-1 font-semibold ${sound.tone}`}>
-                      <SoundIcon className="size-4" /> {sound.label}
+                      <SoundIcon className="size-4" /> {t(sound.labelKey)}
                     </span>
                   </Row>
-                  <Row icon={ScanLine} iconTone="text-muted-foreground" label="قارئ البطاقات">
+                  <Row icon={ScanLine} iconTone="text-muted-foreground" label={t('devices.cardReader')}>
                     <span className={`flex items-center gap-1 font-semibold ${reader.tone}`}>
-                      <ReaderIcon className="size-4" /> {reader.label}
+                      <ReaderIcon className="size-4" /> {t(reader.labelKey)}
                     </span>
                   </Row>
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-xs text-muted-foreground">
-                  <span>آخر بيانات: {d.lastData}</span>
+                  <span>{t('devices.lastData')}: {d.lastData}</span>
                   <span className="font-mono" dir="ltr">{d.firmware}</span>
                 </div>
               </Card>

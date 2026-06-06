@@ -1,5 +1,9 @@
+'use client'
+
 import { noiseStatus, noiseStatusMeta } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/components/language-provider'
+import { noiseStatusKey } from '@/lib/i18n/ui'
 
 export function NoiseMeter({
   value,
@@ -10,6 +14,7 @@ export function NoiseMeter({
 }) {
   const status = noiseStatus(value)
   const meta = noiseStatusMeta[status]
+  const { t } = useLanguage()
   const pct = Math.min(value, 100)
 
   const dims = {
@@ -54,7 +59,7 @@ export function NoiseMeter({
           className="text-[11px] font-bold"
           style={{ color: meta.color }}
         >
-          {meta.label}
+          {t(noiseStatusKey[status])}
         </span>
       </div>
     </div>
@@ -62,7 +67,9 @@ export function NoiseMeter({
 }
 
 export function NoiseDot({ value }: { value: number }) {
-  const meta = noiseStatusMeta[noiseStatus(value)]
+  const status = noiseStatus(value)
+  const meta = noiseStatusMeta[status]
+  const { t } = useLanguage()
   return (
     <span className="inline-flex items-center gap-1.5">
       <span
@@ -70,7 +77,7 @@ export function NoiseDot({ value }: { value: number }) {
         style={{ backgroundColor: meta.color }}
       />
       <span className="text-xs font-semibold" style={{ color: meta.color }}>
-        {meta.label}
+        {t(noiseStatusKey[status])}
       </span>
     </span>
   )

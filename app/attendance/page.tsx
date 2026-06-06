@@ -10,6 +10,8 @@ import { Table, THead, TR, TH, TD } from '@/components/ui/table'
 import { AttendanceBarChart } from '@/components/charts'
 import { useLevel } from '@/components/level-provider'
 import { getStudents, getAttendanceByClass, getKpis, levelMap } from '@/lib/mock-data'
+import { useLanguage } from '@/components/language-provider'
+import { minutes, withLevel } from '@/lib/i18n/ui'
 import {
   CheckCircle2,
   XCircle,
@@ -23,21 +25,29 @@ type Row = {
   classroom: string
   firstIn: string
   lastOut: string
-  status: 'حاضر' | 'غائب' | 'متأخر' | 'لم يمرر البطاقة'
+  status: 'present' | 'absent' | 'late' | 'noScan'
   absenceInSession: string
   exits: number
   updated: string
 }
 
 const statusBadge: Record<Row['status'], 'success' | 'danger' | 'warning' | 'accent'> = {
-  حاضر: 'success',
-  غائب: 'danger',
-  متأخر: 'warning',
-  'لم يمرر البطاقة': 'accent',
+  present: 'success',
+  absent: 'danger',
+  late: 'warning',
+  noScan: 'accent',
+}
+
+const statusLabelKey: Record<Row['status'], string> = {
+  present: 'classrooms.present',
+  absent: 'classrooms.absent',
+  late: 'attendance.lateStart',
+  noScan: 'attendance.noCardScan',
 }
 
 export default function AttendancePage() {
   const { level } = useLevel()
+  const { t } = useLanguage()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<'all' | Row['status']>('all')
 
@@ -47,19 +57,19 @@ export default function AttendancePage() {
     return getStudents(level).map((s, i) => {
       const status: Row['status'] =
         s.status === 'absent'
-          ? 'غائب'
+          ? 'absent'
           : i % 7 === 3
-            ? 'متأخر'
+            ? 'late'
             : i % 11 === 5
-              ? 'لم يمرر البطاقة'
-              : 'حاضر'
+              ? 'noScan'
+              : 'present'
       return {
         student: s.name,
         classroom: s.classroom,
-        firstIn: s.status === 'absent' ? '—' : ['07:18 ص', '07:22 ص', '07:25 ص', '07:31 ص'][i % 4],
+        firstIn: s.status === 'absent' ? '—' : ['07:18', '07:22', '07:25', '07:31'][i % 4],
         lastOut: s.status === 'outside' ? s.lastMovement.split('·')[1]?.trim() ?? '—' : '—',
         status,
-        absenceInSession: status === 'حاضر' ? '0 د' : `${(i % 4) * 5 + 5} د`,
+        absenceInSession: status === 'present' ? minutes(0, t) : minutes((i % 4) * 5 + 5, t),
         exits: s.exits,
         updated: ['قبل دقيقة', 'قبل 3 دقائق', 'قبل 6 دقائق'][i % 3],
       }
@@ -84,27 +94,27 @@ export default function AttendancePage() {
 
   if (!level || !lvl || !kpis) return null
 
-  const present = rows.filter((r) => r.status === 'حاضر').length
-  const absent = rows.filter((r) => r.status === 'غائب').length
-  const late = rows.filter((r) => r.status === 'متأخر').length
-  const noScan = rows.filter((r) => r.status === 'لم يمرر البطاقة').length
+  const present = rows.filter((r) => r.status === 'present').length
+  const absent = rows.filter((r) => r.status === 'absent').length
+  const late = rows.filter((r) => r.status === 'late').length
+  const noScan = rows.filter((r) => r.status === 'noScan').length
 
   return (
     <DashboardShell
-      title="الحضور والغياب"
-      subtitle={`الحضور الإلكتروني · ${lvl.ar}`}
+      title={t('attendance.title')}
+      subtitle={withLevel('attendance.subtitle', level, t)}
     >
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="حضور اليوم" value={present} icon={CheckCircle2} tone="success" />
-          <StatCard label="غياب اليوم" value={absent} icon={XCircle} tone="danger" />
-          <StatCard label="تأخر عن بداية الحصة" value={late} icon={Clock} tone="warning" />
-          <StatCard label="لم يتم تمرير البطاقة" value={noScan} icon={CreditCard} tone="accent" />
+          <StatCard label={t('attendance.todayPresent')} value={present} icon={CheckCircle2} tone="success" />
+          <StatCard label={t('attendance.todayAbsent')} value={absent} icon={XCircle} tone="danger" />
+          <StatCard label={t('attendance.lateStart')} value={late} icon={Clock} tone="warning" />
+          <StatCard label={t('attendance.noCardScan')} value={noScan} icon={CreditCard} tone="accent" />
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>نسبة الحضور لكل فصل</CardTitle>
+            <CardTitle>{t('attendance.byClass')}</CardTitle>
           </CardHeader>
           <CardContent>
             <AttendanceBarChart data={attendanceByClass} />
@@ -116,14 +126,14 @@ export default function AttendancePage() {
             <div className="relative w-full lg:max-w-xs">
               <Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="ابحث عن طالب أو فصل..."
+                placeholder={t('attendance.search')}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 className="pr-9"
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              {(['all', 'حاضر', 'غائب', 'متأخر', 'لم يمرر البطاقة'] as const).map((f) => (
+              {(['all', 'present', 'absent', 'late', 'noScan'] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
@@ -134,7 +144,7 @@ export default function AttendancePage() {
                       : 'bg-muted text-muted-foreground hover:bg-muted/70')
                   }
                 >
-                  {f === 'all' ? 'الكل' : f}
+                  {f === 'all' ? t('common.all') : t(statusLabelKey[f])}
                 </button>
               ))}
             </div>
@@ -143,14 +153,14 @@ export default function AttendancePage() {
           <Table>
             <THead>
               <TR className="hover:bg-transparent">
-                <TH>الطالب</TH>
-                <TH>الفصل</TH>
-                <TH>أول دخول</TH>
-                <TH>آخر خروج</TH>
-                <TH>الحالة</TH>
-                <TH>مدة الغياب داخل الحصص</TH>
-                <TH>عدد مرات الخروج</TH>
-                <TH>آخر تحديث</TH>
+                <TH>{t('attendance.student')}</TH>
+                <TH>{t('classrooms.classroom')}</TH>
+                <TH>{t('attendance.firstIn')}</TH>
+                <TH>{t('attendance.lastOut')}</TH>
+                <TH>{t('common.status')}</TH>
+                <TH>{t('attendance.absenceDuration')}</TH>
+                <TH>{t('attendance.exitCount')}</TH>
+                <TH>{t('common.lastUpdate')}</TH>
               </TR>
             </THead>
             <tbody>
@@ -160,7 +170,7 @@ export default function AttendancePage() {
                   <TD className="text-muted-foreground">{r.classroom}</TD>
                   <TD className="tabular-nums">{r.firstIn}</TD>
                   <TD className="tabular-nums">{r.lastOut}</TD>
-                  <TD><Badge variant={statusBadge[r.status]}>{r.status}</Badge></TD>
+                  <TD><Badge variant={statusBadge[r.status]}>{t(statusLabelKey[r.status])}</Badge></TD>
                   <TD className="tabular-nums">{r.absenceInSession}</TD>
                   <TD className="tabular-nums">{r.exits}</TD>
                   <TD className="text-xs text-muted-foreground">{r.updated}</TD>

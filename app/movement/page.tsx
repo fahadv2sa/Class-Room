@@ -12,27 +12,52 @@ import {
   getMovementByHour,
   getStudents,
   getClassrooms,
-  levelMap,
 } from '@/lib/mock-data'
 import { LogOut, Timer, Repeat, Clock, LogIn, Undo2 } from 'lucide-react'
+import { useLanguage } from '@/components/language-provider'
+import { withLevel } from '@/lib/i18n/ui'
 
 const typeMeta: Record<string, { badge: 'success' | 'danger' | 'accent'; icon: typeof LogIn }> = {
-  دخول: { badge: 'success', icon: LogIn },
-  خروج: { badge: 'danger', icon: LogOut },
-  عودة: { badge: 'accent', icon: Undo2 },
+  entry: { badge: 'success', icon: LogIn },
+  exit: { badge: 'danger', icon: LogOut },
+  return: { badge: 'accent', icon: Undo2 },
 }
 
 const statusBadge: Record<string, 'success' | 'warning' | 'danger'> = {
-  بإذن: 'success',
-  متأخر: 'warning',
-  'لم يعد بعد': 'danger',
+  approved: 'success',
+  late: 'warning',
+  notReturned: 'danger',
+}
+
+const movementTypeKey: Record<string, string> = {
+  دخول: 'entry',
+  خروج: 'exit',
+  عودة: 'return',
+}
+
+const movementStatusKey: Record<string, string> = {
+  بإذن: 'approved',
+  متأخر: 'late',
+  'لم يعد بعد': 'notReturned',
+}
+
+const typeLabelKey: Record<string, string> = {
+  entry: 'movement.entry',
+  exit: 'movement.exit',
+  return: 'movement.return',
+}
+
+const statusLabelKey: Record<string, string> = {
+  approved: 'movement.approved',
+  late: 'movement.late',
+  notReturned: 'movement.notReturned',
 }
 
 export default function MovementPage() {
   const { level } = useLevel()
+  const { t } = useLanguage()
   if (!level) return null
 
-  const lvl = levelMap[level]
   const movements = getMovements(level)
   const movementByHour = getMovementByHour(level)
   const students = getStudents(level)
@@ -49,57 +74,59 @@ export default function MovementPage() {
 
   return (
     <DashboardShell
-      title="حركة الطلاب"
-      subtitle={`تتبع لحظي لحركة الفصول · ${lvl.ar}`}
+      title={t('movement.title')}
+      subtitle={withLevel('movement.subtitle', level, t)}
     >
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="أكثر الطلاب خروجاً اليوم" value={topStudent?.name ?? '—'} icon={Repeat} tone="warning" />
-          <StatCard label="أكثر الفصول خروجاً" value={topClass?.code ?? '—'} icon={LogOut} tone="danger" />
-          <StatCard label="متوسط مدة الخروج" value="8" unit="دقائق" icon={Timer} tone="accent" />
-          <StatCard label="أوقات الذروة للخروج" value="12:00" unit="ظهراً" icon={Clock} tone="accent" />
+          <StatCard label={t('movement.topStudent')} value={topStudent?.name ?? '—'} icon={Repeat} tone="warning" />
+          <StatCard label={t('movement.topClass')} value={topClass?.code ?? '—'} icon={LogOut} tone="danger" />
+          <StatCard label={t('movement.avgDuration')} value="8" unit={t('settings.minutes')} icon={Timer} tone="accent" />
+          <StatCard label={t('movement.peakTime')} value="12:00" unit={t('common.pm')} icon={Clock} tone="accent" />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Live feed */}
           <Card className="lg:col-span-2">
             <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>سجل الحركة المباشر</CardTitle>
+              <CardTitle>{t('movement.liveLog')}</CardTitle>
               <Badge variant="accent">
-                <span className="size-1.5 rounded-full bg-accent live-dot" /> مباشر
+                <span className="size-1.5 rounded-full bg-accent live-dot" /> {t('common.live')}
               </Badge>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <THead>
                   <TR className="hover:bg-transparent">
-                    <TH>الطالب</TH>
-                    <TH>الفصل</TH>
-                    <TH>المعلم</TH>
-                    <TH>الحركة</TH>
-                    <TH>الوقت</TH>
-                    <TH>المدة خارج الفصل</TH>
-                    <TH>الحالة</TH>
+                    <TH>{t('attendance.student')}</TH>
+                    <TH>{t('classrooms.classroom')}</TH>
+                    <TH>{t('movement.teacher')}</TH>
+                    <TH>{t('movement.type')}</TH>
+                    <TH>{t('common.time')}</TH>
+                    <TH>{t('movement.durationOutside')}</TH>
+                    <TH>{t('common.status')}</TH>
                   </TR>
                 </THead>
                 <tbody>
                   {movements.map((m) => {
-                    const t = typeMeta[m.type]
-                    const Icon = t.icon
+                    const type = movementTypeKey[m.type] ?? 'entry'
+                    const status = movementStatusKey[m.status] ?? 'approved'
+                    const typeInfo = typeMeta[type]
+                    const Icon = typeInfo.icon
                     return (
                       <TR key={m.id}>
                         <TD className="font-bold">{m.student}</TD>
                         <TD className="text-muted-foreground">{m.classroom}</TD>
                         <TD className="text-muted-foreground">{m.teacher}</TD>
                         <TD>
-                          <Badge variant={t.badge}>
-                            <Icon className="size-3" /> {m.type}
+                          <Badge variant={typeInfo.badge}>
+                            <Icon className="size-3" /> {t(typeLabelKey[type])}
                           </Badge>
                         </TD>
                         <TD className="tabular-nums">{m.time}</TD>
                         <TD className="tabular-nums">{m.duration}</TD>
                         <TD>
-                          <Badge variant={statusBadge[m.status]}>{m.status}</Badge>
+                          <Badge variant={statusBadge[status]}>{t(statusLabelKey[status])}</Badge>
                         </TD>
                       </TR>
                     )
@@ -112,7 +139,7 @@ export default function MovementPage() {
           {/* Movement chart */}
           <Card>
             <CardHeader>
-              <CardTitle>الخروج والعودة حسب الساعة</CardTitle>
+              <CardTitle>{t('dashboard.movementByHour')}</CardTitle>
             </CardHeader>
             <CardContent>
               <MovementLineChart data={movementByHour} />
@@ -123,7 +150,7 @@ export default function MovementPage() {
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>أكثر الطلاب خروجاً اليوم</CardTitle>
+              <CardTitle>{t('movement.topStudent')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 pt-2">
               {topExitStudents.map((s, i) => (
@@ -135,7 +162,7 @@ export default function MovementPage() {
                       <p className="text-[11px] text-muted-foreground">{s.classroom}</p>
                     </div>
                   </div>
-                  <Badge variant="warning">{s.exits} مرات</Badge>
+                  <Badge variant="warning">{s.exits} {t('movement.times')}</Badge>
                 </div>
               ))}
             </CardContent>
@@ -143,7 +170,7 @@ export default function MovementPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>أكثر الفصول خروجاً</CardTitle>
+              <CardTitle>{t('movement.topClass')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 pt-2">
               {topExitClasses.map((c, i) => (
@@ -152,7 +179,7 @@ export default function MovementPage() {
                     <span className="flex size-7 items-center justify-center rounded-lg bg-card text-xs font-bold text-muted-foreground">{i + 1}</span>
                     <span className="text-sm font-semibold">{c.name}</span>
                   </div>
-                  <Badge variant="danger">{c.outside} خارج الفصل</Badge>
+                  <Badge variant="danger">{c.outside} {t('classrooms.outside')}</Badge>
                 </div>
               ))}
             </CardContent>

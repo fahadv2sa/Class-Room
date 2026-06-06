@@ -14,11 +14,12 @@ import {
   getNoiseByClass,
   getNoiseByTeacher,
   getClassrooms,
-  levelMap,
 } from '@/lib/mock-data'
 import { Volume2, ArrowUp, ArrowDown, AlertOctagon } from 'lucide-react'
+import { useLanguage } from '@/components/language-provider'
+import { withLevel } from '@/lib/i18n/ui'
 
-const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس']
+const dayKeys = ['days.sunday', 'days.monday', 'days.tuesday', 'days.wednesday', 'days.thursday']
 const hours = ['07', '08', '09', '10', '11', '12', '01', '02']
 
 // deterministic heatmap values
@@ -33,9 +34,9 @@ function heatColor(v: number) {
 
 export default function NoisePage() {
   const { level } = useLevel()
+  const { t } = useLanguage()
   if (!level) return null
 
-  const lvl = levelMap[level]
   const noiseByHour = getNoiseByHour(level)
   const noiseByClass = getNoiseByClass(level)
   const noiseByTeacher = getNoiseByTeacher(level)
@@ -51,21 +52,21 @@ export default function NoisePage() {
 
   return (
     <DashboardShell
-      title="مستوى الضوضاء"
-      subtitle={`تحليلات صوتية لحظية · ${lvl.ar}`}
+      title={t('noise.title')}
+      subtitle={withLevel('noise.subtitle', level, t)}
     >
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-          <StatCard label="متوسط الضوضاء اليوم" value={avg} unit="dB" icon={Volume2} tone="warning" />
-          <StatCard label="أعلى قراءة" value={max} unit="dB" icon={ArrowUp} tone="danger" />
-          <StatCard label="أقل قراءة" value={min} unit="dB" icon={ArrowDown} tone="success" />
-          <StatCard label="مرات الوصول للأحمر" value={redHits} icon={AlertOctagon} tone="danger" />
-          <StatCard label="الفصول الهادئة الآن" value={classrooms.filter((c) => c.noise <= 45).length} icon={Volume2} tone="success" />
+          <StatCard label={t('noise.avgToday')} value={avg} unit="dB" icon={Volume2} tone="warning" />
+          <StatCard label={t('noise.highest')} value={max} unit="dB" icon={ArrowUp} tone="danger" />
+          <StatCard label={t('noise.lowest')} value={min} unit="dB" icon={ArrowDown} tone="success" />
+          <StatCard label={t('noise.redHits')} value={redHits} icon={AlertOctagon} tone="danger" />
+          <StatCard label={t('noise.quietNow')} value={classrooms.filter((c) => c.noise <= 45).length} icon={Volume2} tone="success" />
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>مستوى الضوضاء حسب الساعة</CardTitle>
+            <CardTitle>{t('noise.byHour')}</CardTitle>
           </CardHeader>
           <CardContent>
             <NoiseAreaChart data={noiseByHour} />
@@ -75,7 +76,7 @@ export default function NoisePage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>الضوضاء حسب الفصل</CardTitle>
+              <CardTitle>{t('noise.byClass')}</CardTitle>
             </CardHeader>
             <CardContent>
               <NoiseRankBarChart data={noiseByClass.slice(0, 10)} />
@@ -83,7 +84,7 @@ export default function NoisePage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>الهدوء حسب المعلم</CardTitle>
+              <CardTitle>{t('noise.byTeacher')}</CardTitle>
             </CardHeader>
             <CardContent>
               <TeacherQuietBarChart data={noiseByTeacher} />
@@ -94,11 +95,11 @@ export default function NoisePage() {
         {/* Heatmap */}
         <Card>
           <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>خريطة حرارية للضوضاء حسب اليوم والوقت</CardTitle>
+            <CardTitle>{t('noise.heatmap')}</CardTitle>
             <div className="hidden items-center gap-3 text-xs text-muted-foreground sm:flex">
-              <span className="flex items-center gap-1"><span className="size-3 rounded bg-success" /> هادئ</span>
-              <span className="flex items-center gap-1"><span className="size-3 rounded bg-warning" /> متوسط</span>
-              <span className="flex items-center gap-1"><span className="size-3 rounded bg-destructive" /> مرتفع</span>
+              <span className="flex items-center gap-1"><span className="size-3 rounded bg-success" /> {t('noise.quiet')}</span>
+              <span className="flex items-center gap-1"><span className="size-3 rounded bg-warning" /> {t('noise.medium')}</span>
+              <span className="flex items-center gap-1"><span className="size-3 rounded bg-destructive" /> {t('noise.loud')}</span>
             </div>
           </CardHeader>
           <CardContent>
@@ -110,12 +111,12 @@ export default function NoisePage() {
                     <span key={h}>{h}</span>
                   ))}
                 </div>
-                {days.map((d, di) => (
+                {dayKeys.map((dayKey, di) => (
                   <div
-                    key={d}
+                    key={dayKey}
                     className="mb-1.5 grid grid-cols-[80px_repeat(8,1fr)] items-center gap-1.5"
                   >
-                    <span className="text-xs font-semibold text-muted-foreground">{d}</span>
+                    <span className="text-xs font-semibold text-muted-foreground">{t(dayKey)}</span>
                     {hours.map((_, hi) => {
                       const v = heat(di, hi)
                       return (
@@ -123,7 +124,7 @@ export default function NoisePage() {
                           key={hi}
                           className="flex h-9 items-center justify-center rounded-md text-[11px] font-bold text-white/90"
                           style={{ backgroundColor: heatColor(v) }}
-                          title={`${d} ${hours[hi]} — ${v} dB`}
+                          title={`${t(dayKey)} ${hours[hi]} - ${v} dB`}
                         >
                           {v}
                         </div>
@@ -137,8 +138,8 @@ export default function NoisePage() {
         </Card>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <RankList title="أكثر الفصول هدوءاً" items={quietest} tone="success" />
-          <RankList title="أكثر الفصول إزعاجاً" items={loudest} tone="danger" />
+          <RankList title={t('dashboard.quietestClasses')} items={quietest} tone="success" />
+          <RankList title={t('dashboard.loudestClasses')} items={loudest} tone="danger" />
         </div>
       </div>
     </DashboardShell>

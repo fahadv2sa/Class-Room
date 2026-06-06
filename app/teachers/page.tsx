@@ -5,9 +5,11 @@ import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useLevel } from '@/components/level-provider'
-import { levelMap, type Level } from '@/lib/mock-data'
+import { type Level } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import { Award, Volume2, ClipboardCheck, LogOut, Star } from 'lucide-react'
+import { useLanguage } from '@/components/language-provider'
+import { percent, withLevel } from '@/lib/i18n/ui'
 
 type ApiTeacher = {
   id: string
@@ -59,14 +61,15 @@ function projectTeacher(teacher: ApiTeacher, index: number, level: Level): Teach
   }
 }
 
-function gradeBadge(v: number): { variant: 'success' | 'warning' | 'danger'; label: string } {
-  if (v >= 85) return { variant: 'success', label: 'ممتاز' }
-  if (v >= 70) return { variant: 'warning', label: 'جيد' }
-  return { variant: 'danger', label: 'يحتاج متابعة' }
+function gradeBadge(v: number): { variant: 'success' | 'warning' | 'danger'; key: string } {
+  if (v >= 85) return { variant: 'success', key: 'teachers.excellent' }
+  if (v >= 70) return { variant: 'warning', key: 'teachers.good' }
+  return { variant: 'danger', key: 'teachers.needsFollowup' }
 }
 
 export default function TeachersPage() {
   const { level } = useLevel()
+  const { t } = useLanguage()
   const [apiTeachers, setApiTeachers] = useState<ApiTeacher[]>([])
 
   useEffect(() => {
@@ -96,7 +99,6 @@ export default function TeachersPage() {
 
   if (!level) return null
 
-  const lvl = levelMap[level]
   const sorted = [...teachers].sort((a, b) => a.rank - b.rank)
   const rankings = {
     quietest: [...teachers].sort((a, b) => b.avgQuiet - a.avgQuiet).slice(0, 3),
@@ -107,49 +109,49 @@ export default function TeachersPage() {
 
   return (
     <DashboardShell
-      title="المعلمون"
-      subtitle={`مؤشرات أداء الفصول · ${lvl.ar}`}
+      title={t('teachers.title')}
+      subtitle={withLevel('teachers.subtitle', level, t)}
     >
       <div className="space-y-6">
         {/* Rankings */}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <RankCard title="الأكثر هدوءاً" icon={Volume2} tone="success" items={rankings.quietest.map((t) => ({ name: t.name, val: `${t.avgQuiet}٪` }))} />
-          <RankCard title="الأقل خروج طلاب" icon={LogOut} tone="accent" items={rankings.fewestExits.map((t) => ({ name: t.name, val: t.avgExits.toFixed(1) }))} />
-          <RankCard title="الأعلى حضوراً" icon={ClipboardCheck} tone="success" items={rankings.highestAttendance.map((t) => ({ name: t.name, val: `${t.attendanceRate}٪` }))} />
-          <RankCard title="يحتاج متابعة" icon={Star} tone="warning" items={rankings.needsFollowup.map((t) => ({ name: t.name, val: `${t.discipline}٪` }))} />
+          <RankCard title={t('teachers.quietest')} icon={Volume2} tone="success" items={rankings.quietest.map((teacher) => ({ name: teacher.name, val: percent(teacher.avgQuiet, t) }))} />
+          <RankCard title={t('teachers.fewestExits')} icon={LogOut} tone="accent" items={rankings.fewestExits.map((teacher) => ({ name: teacher.name, val: teacher.avgExits.toFixed(1) }))} />
+          <RankCard title={t('teachers.highestAttendance')} icon={ClipboardCheck} tone="success" items={rankings.highestAttendance.map((teacher) => ({ name: teacher.name, val: percent(teacher.attendanceRate, t) }))} />
+          <RankCard title={t('teachers.needsFollowup')} icon={Star} tone="warning" items={rankings.needsFollowup.map((teacher) => ({ name: teacher.name, val: percent(teacher.discipline, t) }))} />
         </div>
 
         {/* Teacher cards */}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {sorted.map((t) => {
-            const g = gradeBadge(t.discipline)
+          {sorted.map((teacher) => {
+            const g = gradeBadge(teacher.discipline)
             return (
-              <Card key={t.id} className="p-5 transition-all hover:shadow-md">
+              <Card key={teacher.id} className="p-5 transition-all hover:shadow-md">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="flex size-12 items-center justify-center rounded-xl bg-accent/10 text-lg font-extrabold text-accent">
-                      {t.name.charAt(0)}
+                      {teacher.name.charAt(0)}
                     </div>
                     <div className="leading-tight">
-                      <p className="font-extrabold">{t.name}</p>
-                      <p className="text-xs text-muted-foreground">{t.subject}</p>
+                      <p className="font-extrabold">{teacher.name}</p>
+                      <p className="text-xs text-muted-foreground">{teacher.subject}</p>
                     </div>
                   </div>
                   <span className="flex items-center gap-1 rounded-lg bg-muted px-2 py-1 text-xs font-bold">
-                    <Award className="size-3.5 text-accent" /> #{t.rank}
+                    <Award className="size-3.5 text-accent" /> #{teacher.rank}
                   </span>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-2">
-                  <Metric label="عدد الحصص" value={t.sessionsToday} />
-                  <Metric label="هدوء الفصل" value={`${t.avgQuiet}٪`} />
-                  <Metric label="نسبة الحضور" value={`${t.attendanceRate}٪`} />
-                  <Metric label="متوسط الخروج" value={t.avgExits.toFixed(1)} />
+                  <Metric label={t('teachers.sessions')} value={teacher.sessionsToday} />
+                  <Metric label={t('teachers.classQuiet')} value={percent(teacher.avgQuiet, t)} />
+                  <Metric label={t('teachers.attendanceRate')} value={percent(teacher.attendanceRate, t)} />
+                  <Metric label={t('teachers.avgExits')} value={teacher.avgExits.toFixed(1)} />
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
-                  <span className="text-xs text-muted-foreground">تقييم الانضباط</span>
-                  <Badge variant={g.variant}>{g.label}</Badge>
+                  <span className="text-xs text-muted-foreground">{t('teachers.disciplineRating')}</span>
+                  <Badge variant={g.variant}>{t(g.key)}</Badge>
                 </div>
               </Card>
             )

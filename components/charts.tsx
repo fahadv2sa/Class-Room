@@ -14,6 +14,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts'
+import { useLanguage } from '@/components/language-provider'
 
 const axisStyle = {
   fontSize: 12,
@@ -27,7 +28,6 @@ const tooltipStyle = {
   fontSize: 12,
   fontFamily: 'var(--font-cairo)',
   boxShadow: '0 8px 24px rgba(15,23,42,0.08)',
-  direction: 'rtl' as const,
 }
 
 export function NoiseAreaChart({
@@ -35,7 +35,9 @@ export function NoiseAreaChart({
 }: {
   data: { hour?: string; time?: string; noise: number }[]
 }) {
+  const { language, t } = useLanguage()
   const key = data[0]?.hour !== undefined ? 'hour' : 'time'
+  const direction = language === 'EN' ? 'ltr' : 'rtl'
   return (
     <ResponsiveContainer width="100%" height={260}>
       <AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
@@ -46,13 +48,13 @@ export function NoiseAreaChart({
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-        <XAxis dataKey={key} tick={axisStyle} axisLine={false} tickLine={false} reversed />
+        <XAxis dataKey={key} tick={axisStyle} axisLine={false} tickLine={false} reversed={language === 'AR'} />
         <YAxis tick={axisStyle} axisLine={false} tickLine={false} domain={[0, 100]} />
-        <Tooltip contentStyle={tooltipStyle} labelStyle={{ fontWeight: 700 }} />
+        <Tooltip contentStyle={{ ...tooltipStyle, direction }} labelStyle={{ fontWeight: 700 }} />
         <Area
           type="monotone"
           dataKey="noise"
-          name="مستوى الضوضاء"
+          name={t('noise.title')}
           stroke="#2563eb"
           strokeWidth={2.5}
           fill="url(#noiseFill)"
@@ -67,14 +69,16 @@ export function AttendanceBarChart({
 }: {
   data: { name: string; حضور: number }[]
 }) {
+  const { language, t } = useLanguage()
+  const direction = language === 'EN' ? 'ltr' : 'rtl'
   return (
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-        <XAxis dataKey="name" tick={{ ...axisStyle, fontSize: 10 }} axisLine={false} tickLine={false} reversed interval={0} angle={0} />
+        <XAxis dataKey="name" tick={{ ...axisStyle, fontSize: 10 }} axisLine={false} tickLine={false} reversed={language === 'AR'} interval={0} angle={0} />
         <YAxis tick={axisStyle} axisLine={false} tickLine={false} domain={[0, 100]} />
-        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#f8fafc' }} />
-        <Bar dataKey="حضور" fill="#22c55e" radius={[6, 6, 0, 0]} maxBarSize={36} />
+        <Tooltip contentStyle={{ ...tooltipStyle, direction }} cursor={{ fill: '#f8fafc' }} />
+        <Bar dataKey="حضور" name={t('attendance.title')} fill="#22c55e" radius={[6, 6, 0, 0]} maxBarSize={36} />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -85,6 +89,8 @@ export function NoiseRankBarChart({
 }: {
   data: { name: string; noise: number }[]
 }) {
+  const { language, t } = useLanguage()
+  const direction = language === 'EN' ? 'ltr' : 'rtl'
   const color = (n: number) =>
     n <= 45 ? '#22c55e' : n <= 70 ? '#f59e0b' : '#ef4444'
   return (
@@ -105,8 +111,8 @@ export function NoiseRankBarChart({
           width={90}
           orientation="right"
         />
-        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#f8fafc' }} />
-        <Bar dataKey="noise" name="الضوضاء" radius={[0, 6, 6, 0]} maxBarSize={24}>
+        <Tooltip contentStyle={{ ...tooltipStyle, direction }} cursor={{ fill: '#f8fafc' }} />
+        <Bar dataKey="noise" name={t('classrooms.noise')} radius={[0, 6, 6, 0]} maxBarSize={24}>
           {data.map((d, i) => (
             <Cell key={i} fill={color(d.noise)} />
           ))}
@@ -121,15 +127,17 @@ export function MovementLineChart({
 }: {
   data: { hour: string; خروج: number; عودة: number }[]
 }) {
+  const { language, t } = useLanguage()
+  const direction = language === 'EN' ? 'ltr' : 'rtl'
   return (
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-        <XAxis dataKey="hour" tick={axisStyle} axisLine={false} tickLine={false} reversed />
+        <XAxis dataKey="hour" tick={axisStyle} axisLine={false} tickLine={false} reversed={language === 'AR'} />
         <YAxis tick={axisStyle} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={tooltipStyle} />
-        <Line type="monotone" dataKey="خروج" stroke="#ef4444" strokeWidth={2.5} dot={{ r: 3 }} />
-        <Line type="monotone" dataKey="عودة" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} />
+        <Tooltip contentStyle={{ ...tooltipStyle, direction }} />
+        <Line type="monotone" dataKey="خروج" name={t('movement.exit')} stroke="#ef4444" strokeWidth={2.5} dot={{ r: 3 }} />
+        <Line type="monotone" dataKey="عودة" name={t('movement.return')} stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} />
       </LineChart>
     </ResponsiveContainer>
   )
@@ -140,6 +148,8 @@ export function TeacherQuietBarChart({
 }: {
   data: { name: string; هدوء: number }[]
 }) {
+  const { language, t } = useLanguage()
+  const direction = language === 'EN' ? 'ltr' : 'rtl'
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart
@@ -158,8 +168,8 @@ export function TeacherQuietBarChart({
           width={90}
           orientation="right"
         />
-        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#f8fafc' }} />
-        <Bar dataKey="هدوء" fill="#2563eb" radius={[0, 6, 6, 0]} maxBarSize={22} />
+        <Tooltip contentStyle={{ ...tooltipStyle, direction }} cursor={{ fill: '#f8fafc' }} />
+        <Bar dataKey="هدوء" name={t('teachers.classQuiet')} fill="#2563eb" radius={[0, 6, 6, 0]} maxBarSize={22} />
       </BarChart>
     </ResponsiveContainer>
   )

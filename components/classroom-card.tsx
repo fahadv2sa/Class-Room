@@ -1,9 +1,12 @@
+'use client'
+
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { NoiseDot } from '@/components/noise-meter'
 import { noiseStatus, noiseStatusMeta, type Classroom } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/components/language-provider'
 import {
   UserCheck,
   UserX,
@@ -16,6 +19,7 @@ import {
 
 export function ClassroomCard({ c }: { c: Classroom }) {
   const meta = noiseStatusMeta[noiseStatus(c.noise)]
+  const { t } = useLanguage()
   return (
     <Link href={`/classrooms/${c.id}`}>
       <Card className="group h-full p-5 transition-all hover:-translate-y-0.5 hover:shadow-md">
@@ -37,11 +41,11 @@ export function ClassroomCard({ c }: { c: Classroom }) {
           </div>
           {c.deviceStatus === 'online' ? (
             <Badge variant="success">
-              <Wifi className="size-3" /> متصل
+              <Wifi className="size-3" /> {t('classrooms.online')}
             </Badge>
           ) : (
             <Badge variant="danger">
-              <WifiOff className="size-3" /> غير متصل
+              <WifiOff className="size-3" /> {t('classrooms.offline')}
             </Badge>
           )}
         </div>
@@ -52,7 +56,7 @@ export function ClassroomCard({ c }: { c: Classroom }) {
         >
           <div>
             <p className="text-[11px] font-medium text-muted-foreground">
-              مستوى الضوضاء
+              {t('classrooms.noiseLevel')}
             </p>
             <NoiseDot value={c.noise} />
           </div>
@@ -65,15 +69,15 @@ export function ClassroomCard({ c }: { c: Classroom }) {
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-          <Stat icon={UserCheck} tone="success" label="حاضر" value={c.present} />
-          <Stat icon={UserX} tone="danger" label="غائب" value={c.absent} />
-          <Stat icon={LogOut} tone="warning" label="خارج الفصل" value={c.outside} />
+          <Stat icon={UserCheck} tone="success" label={t('classrooms.present')} value={c.present} />
+          <Stat icon={UserX} tone="danger" label={t('classrooms.absent')} value={c.absent} />
+          <Stat icon={LogOut} tone="warning" label={t('classrooms.outside')} value={c.outside} />
         </div>
 
         <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-xs text-muted-foreground">
-          <span>آخر تحديث: {c.lastUpdate}</span>
+          <span>{t('common.lastUpdatePrefix')} {c.lastUpdate}</span>
           <span className="flex items-center gap-0.5 font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100">
-            التفاصيل <ChevronLeft className="size-3.5" />
+            {t('common.details')} <ChevronLeft className="size-3.5" />
           </span>
         </div>
       </Card>

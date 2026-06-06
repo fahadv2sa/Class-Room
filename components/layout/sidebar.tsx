@@ -19,20 +19,21 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLevel } from '@/components/level-provider'
-import { levelMap } from '@/lib/mock-data'
+import { useLanguage } from '@/components/language-provider'
+import { levelShortKey } from '@/lib/i18n/ui'
 
 const nav = [
-  { href: '/dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
-  { href: '/classrooms', label: 'الفصول الدراسية', icon: School },
-  { href: '/attendance', label: 'الحضور والغياب', icon: ClipboardCheck },
-  { href: '/movement', label: 'حركة الطلاب', icon: Footprints },
-  { href: '/noise', label: 'مستوى الضوضاء', icon: Volume2 },
-  { href: '/teachers', label: 'المعلمون', icon: Users },
-  { href: '/students', label: 'الطلاب', icon: GraduationCap },
-  { href: '/reports', label: 'التقارير', icon: FileBarChart },
-  { href: '/alerts', label: 'التنبيهات', icon: Bell },
-  { href: '/devices', label: 'الأجهزة', icon: Cpu },
-  { href: '/settings', label: 'الإعدادات', icon: Settings },
+  { href: '/dashboard', labelKey: 'sidebar.dashboard', icon: LayoutDashboard },
+  { href: '/classrooms', labelKey: 'sidebar.classrooms', icon: School },
+  { href: '/attendance', labelKey: 'sidebar.attendance', icon: ClipboardCheck },
+  { href: '/movement', labelKey: 'sidebar.movement', icon: Footprints },
+  { href: '/noise', labelKey: 'sidebar.noise', icon: Volume2 },
+  { href: '/teachers', labelKey: 'sidebar.teachers', icon: Users },
+  { href: '/students', labelKey: 'sidebar.students', icon: GraduationCap },
+  { href: '/reports', labelKey: 'sidebar.reports', icon: FileBarChart },
+  { href: '/alerts', labelKey: 'sidebar.alerts', icon: Bell },
+  { href: '/devices', labelKey: 'sidebar.devices', icon: Cpu },
+  { href: '/settings', labelKey: 'sidebar.settings', icon: Settings },
 ]
 
 export function Sidebar({
@@ -44,7 +45,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname()
   const { level, school } = useLevel()
-  const currentLevel = level ? levelMap[level] : null
+  const { t } = useLanguage()
 
   return (
     <>
@@ -67,16 +68,16 @@ export function Sidebar({
               <Sparkles className="size-5" />
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-extrabold text-white">ClassPulse AI</p>
+              <p className="text-sm font-extrabold text-white">{t('common.appName')}</p>
               <p className="text-[11px] text-sidebar-foreground/70">
-                منصة إدارة الفصول الذكية
+                {t('common.tagline')}
               </p>
             </div>
           </Link>
           <button
             onClick={onClose}
             className="rounded-lg p-1.5 text-sidebar-foreground/70 hover:bg-sidebar-accent lg:hidden"
-            aria-label="إغلاق القائمة"
+            aria-label={t('common.closeMenu')}
           >
             <X className="size-5" />
           </button>
@@ -100,7 +101,7 @@ export function Sidebar({
                 )}
               >
                 <Icon className="size-[18px] shrink-0" />
-                <span>{item.label}</span>
+                <span>{t(item.labelKey)}</span>
               </Link>
             )
           })}
@@ -112,10 +113,10 @@ export function Sidebar({
               م
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-bold text-white">مدير المدرسة</p>
+              <p className="text-sm font-bold text-white">{t('common.schoolPrincipal')}</p>
               <p className="text-[11px] text-sidebar-foreground/70">
                 {school}
-                {currentLevel ? ` · ${currentLevel.short}` : ''}
+                {level ? ` · ${t(levelShortKey[level])}` : ''}
               </p>
             </div>
           </div>
