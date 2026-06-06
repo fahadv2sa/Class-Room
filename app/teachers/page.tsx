@@ -1,12 +1,63 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useLevel } from '@/components/level-provider'
-import { getTeachers, levelMap } from '@/lib/mock-data'
+import { levelMap, type Level } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import { Award, Volume2, ClipboardCheck, LogOut, Star } from 'lucide-react'
+
+type ApiTeacher = {
+  id: string
+  fullNameAr: string
+}
+
+type TeacherView = {
+  id: string
+  name: string
+  subject: string
+  level: Level
+  sessionsToday: number
+  avgQuiet: number
+  attendanceRate: number
+  avgExits: number
+  discipline: number
+  rank: number
+}
+
+const primarySubjects = ['القرآن الكريم', 'الرياضيات', 'العلوم', 'لغتي', 'الدراسات الاجتماعية', 'اللغة الإنجليزية', 'التربية الفنية']
+const middleSubjects = ['الرياضيات', 'العلوم', 'اللغة العربية', 'الدراسات الاجتماعية', 'اللغة الإنجليزية', 'التربية الإسلامية']
+const highSubjects = ['الرياضيات', 'الفيزياء', 'الكيمياء', 'الأحياء', 'اللغة العربية', 'اللغة الإنجليزية', 'الدراسات الإسلامية']
+
+function subjectsFor(level: Level) {
+  if (level === 'primary') return primarySubjects
+  if (level === 'middle') return middleSubjects
+  return highSubjects
+}
+
+function levelIndex(level: Level) {
+  return level === 'primary' ? 1 : level === 'middle' ? 2 : 3
+}
+
+function projectTeacher(teacher: ApiTeacher, index: number, level: Level): TeacherView {
+  const seed = levelIndex(level) * 100 + index + 1
+  const subjects = subjectsFor(level)
+
+  return {
+    id: teacher.id,
+    name: teacher.fullNameAr,
+    subject: subjects[index % subjects.length],
+    level,
+    sessionsToday: 3 + (seed % 4),
+    avgQuiet: 55 + ((seed * 7) % 41),
+    attendanceRate: 82 + ((seed * 11) % 17),
+    avgExits: Math.round((0.4 + ((seed * 13) % 20) / 10) * 10) / 10,
+    discipline: 55 + ((seed * 17) % 42),
+    rank: 0,
+  }
+}
 
 function gradeBadge(v: number): { variant: 'success' | 'warning' | 'danger'; label: string } {
   if (v >= 85) return { variant: 'success', label: 'ممتاز' }
@@ -16,10 +67,36 @@ function gradeBadge(v: number): { variant: 'success' | 'warning' | 'danger'; lab
 
 export default function TeachersPage() {
   const { level } = useLevel()
+  const [apiTeachers, setApiTeachers] = useState<ApiTeacher[]>([])
+
+  useEffect(() => {
+    async function loadTeachers() {
+      const res = await fetch('/api/teachers?pageSize=100&status=ACTIVE', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      setApiTeachers(data.teachers ?? [])
+    }
+
+    loadTeachers()
+  }, [])
+
+  const teachers = useMemo(() => {
+    if (!level) return []
+    const projected = apiTeachers.map((teacher, index) => projectTeacher(teacher, index, level))
+    projected.sort(
+      (a, b) =>
+        b.avgQuiet + b.attendanceRate + b.discipline - b.avgExits * 10 -
+        (a.avgQuiet + a.attendanceRate + a.discipline - a.avgExits * 10),
+    )
+    projected.forEach((teacher, index) => {
+      teacher.rank = index + 1
+    })
+    return projected
+  }, [apiTeachers, level])
+
   if (!level) return null
 
   const lvl = levelMap[level]
-  const teachers = getTeachers(level)
   const sorted = [...teachers].sort((a, b) => a.rank - b.rank)
   const rankings = {
     quietest: [...teachers].sort((a, b) => b.avgQuiet - a.avgQuiet).slice(0, 3),

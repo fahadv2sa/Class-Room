@@ -50,6 +50,23 @@ enum Language {
   EN
 }
 
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum TeacherStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  GRADUATED
+  TRANSFERRED
+}
+
 model SuperAdmin {
   id                           String                      @id @default(cuid())
   email                        String                      @unique
@@ -96,6 +113,8 @@ model School {
   levels             SchoolLevel[]
   classrooms         Classroom[]
   settings           SchoolSettings?
+  teachers           Teacher[]
+  students           Student[]
 
   @@index([status])
   @@index([subscriptionStatus])
@@ -171,6 +190,7 @@ model Classroom {
   school         School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
   level          SchoolLevel  @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  students       Student[]
 
   @@unique([schoolId, academicYearId, classroomCode])
   @@index([schoolId])
@@ -178,6 +198,66 @@ model Classroom {
   @@index([levelId])
   @@index([schoolId, isActive])
   @@map("classrooms")
+}
+
+model Teacher {
+  id              String        @id @default(cuid())
+  schoolId        String        @map("school_id")
+  employeeNumber  String        @map("employee_number")
+  fullNameAr      String        @map("full_name_ar")
+  fullNameEn      String        @map("full_name_en")
+  nationalId      String?       @map("national_id")
+  email           String?
+  phone           String?
+  gender          Gender
+  status          TeacherStatus @default(ACTIVE)
+  hireDate        DateTime?     @map("hire_date")
+  profilePhotoUrl String?       @map("profile_photo_url")
+  cardCode        String        @unique @map("card_code")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@unique([schoolId, employeeNumber])
+  @@unique([schoolId, nationalId])
+  @@unique([schoolId, email])
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@index([fullNameAr])
+  @@index([fullNameEn])
+  @@map("teachers")
+}
+
+model Student {
+  id              String        @id @default(cuid())
+  schoolId        String        @map("school_id")
+  classroomId     String        @map("classroom_id")
+  studentNumber   String        @map("student_number")
+  fullNameAr      String        @map("full_name_ar")
+  fullNameEn      String        @map("full_name_en")
+  nationalId      String?       @map("national_id")
+  gender          Gender
+  birthDate       DateTime?     @map("birth_date")
+  guardianName    String?       @map("guardian_name")
+  guardianPhone   String?       @map("guardian_phone")
+  guardianEmail   String?       @map("guardian_email")
+  profilePhotoUrl String?       @map("profile_photo_url")
+  cardCode        String        @unique @map("card_code")
+  status          StudentStatus @default(ACTIVE)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classroom       Classroom     @relation(fields: [classroomId], references: [id], onDelete: Restrict)
+
+  @@unique([schoolId, studentNumber])
+  @@unique([schoolId, nationalId])
+  @@index([schoolId])
+  @@index([classroomId])
+  @@index([schoolId, status])
+  @@index([schoolId, classroomId])
+  @@index([fullNameAr])
+  @@index([fullNameEn])
+  @@map("students")
 }
 
 model SchoolSettings {

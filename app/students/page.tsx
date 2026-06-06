@@ -1,14 +1,37 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Table, THead, TR, TH, TD } from '@/components/ui/table'
 import { useLevel } from '@/components/level-provider'
-import { getStudents, levelMap, type Student } from '@/lib/mock-data'
+import { levelMap, type Level } from '@/lib/mock-data'
 import { Search, X, LogIn, LogOut, Undo2 } from 'lucide-react'
+
+type ApiStudent = {
+  id: string
+  fullNameAr: string
+  cardCode: string
+  status: 'ACTIVE' | 'INACTIVE' | 'GRADUATED' | 'TRANSFERRED'
+  classroom: {
+    classroomCode: string
+  }
+}
+
+type Student = {
+  id: string
+  name: string
+  cardId: string
+  classroom: string
+  level: Level
+  attendanceRate: number
+  exits: number
+  avgExitDuration: number
+  lastMovement: string
+  status: 'inside' | 'outside' | 'absent'
+}
 
 const statusMeta: Record<Student['status'], { variant: 'success' | 'warning' | 'danger'; label: string }> = {
   inside: { variant: 'success', label: 'داخل الفصل' },
@@ -16,13 +39,73 @@ const statusMeta: Record<Student['status'], { variant: 'success' | 'warning' | '
   absent: { variant: 'danger', label: 'غائب' },
 }
 
+const levelTypeParam: Record<Level, string> = {
+  primary: 'PRIMARY',
+  middle: 'MIDDLE',
+  high: 'HIGH',
+}
+
+function projectStudent(student: ApiStudent, index: number, level: Level): Student {
+  const seed = student.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), index + 1)
+  const exits = seed % 6
+  const status: Student['status'] =
+    student.status !== 'ACTIVE' ? 'absent' : seed % 17 === 0 ? 'absent' : seed % 11 === 0 ? 'outside' : 'inside'
+
+  return {
+    id: student.id,
+    name: student.fullNameAr,
+    cardId: student.cardCode,
+    classroom: student.classroom.classroomCode,
+    level,
+    attendanceRate: 72 + ((seed * 5) % 28),
+    exits,
+    avgExitDuration: exits === 0 ? 0 : 3 + ((seed * 13) % 10),
+    lastMovement:
+      status === 'absent'
+        ? 'غياب'
+        : status === 'outside'
+          ? `خروج · ${9 + (seed % 3)}:${String(10 + (seed % 50)).padStart(2, '0')} ص`
+          : `دخول · 07:${String(15 + (seed % 25)).padStart(2, '0')} ص`,
+    status,
+  }
+}
+
 export default function StudentsPage() {
   const { level } = useLevel()
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<Student | null>(null)
+  const [apiStudents, setApiStudents] = useState<ApiStudent[]>([])
 
   const lvl = level ? levelMap[level] : null
-  const students = useMemo(() => (level ? getStudents(level) : []), [level])
+  useEffect(() => {
+    async function loadStudents() {
+      if (!level) return
+
+      const loaded: ApiStudent[] = []
+      let page = 1
+      let totalPages = 1
+
+      do {
+        const res = await fetch(`/api/students?page=${page}&pageSize=100&level=${levelTypeParam[level]}`, {
+          cache: 'no-store',
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        loaded.push(...(data.students ?? []))
+        totalPages = data.meta?.totalPages ?? 1
+        page += 1
+      } while (page <= totalPages)
+
+      setApiStudents(loaded)
+    }
+
+    loadStudents()
+  }, [level])
+
+  const students = useMemo(
+    () => (level ? apiStudents.map((student, index) => projectStudent(student, index, level)) : []),
+    [apiStudents, level],
+  )
 
   const filtered = useMemo(
     () =>

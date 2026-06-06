@@ -42,10 +42,81 @@ const classroomCodes = [
   'H3B',
 ]
 
+const teacherNames = [
+  ['خالد الحربي', 'Khalid Alharbi'],
+  ['سارة العتيبي', 'Sarah Alotaibi'],
+  ['فهد القحطاني', 'Fahad Alqahtani'],
+  ['نورة الزهراني', 'Norah Alzahrani'],
+  ['عبدالله الدوسري', 'Abdullah Aldossari'],
+  ['ريم الشمري', 'Reem Alshammari'],
+  ['ماجد المالكي', 'Majed Almaliki'],
+  ['هند الغامدي', 'Hind Alghamdi'],
+  ['تركي العنزي', 'Turki Alanazi'],
+  ['لولوة السبيعي', 'Lulwa Alsobaie'],
+  ['ناصر الرشيدي', 'Nasser Alrashidi'],
+  ['أمل الجهني', 'Amal Aljuhani'],
+  ['عمر المطيري', 'Omar Almutairi'],
+  ['الجوهرة الشهري', 'Aljawhara Alshahri'],
+  ['يوسف البلوي', 'Yousef Albalawi'],
+  ['منيرة الحربي', 'Munirah Alharbi'],
+  ['فيصل القحطاني', 'Faisal Alqahtani'],
+  ['بدور العتيبي', 'Budoor Alotaibi'],
+  ['سلطان الدوسري', 'Sultan Aldossari'],
+  ['شهد الزهراني', 'Shahad Alzahrani'],
+]
+
+const maleStudentNames = [
+  ['محمد الحربي', 'Mohammed Alharbi'],
+  ['عبدالعزيز القحطاني', 'Abdulaziz Alqahtani'],
+  ['سلطان الدوسري', 'Sultan Aldossari'],
+  ['فيصل العتيبي', 'Faisal Alotaibi'],
+  ['يوسف الشمري', 'Yousef Alshammari'],
+  ['عمر الزهراني', 'Omar Alzahrani'],
+  ['ريان المالكي', 'Rayan Almaliki'],
+  ['تركي الغامدي', 'Turki Alghamdi'],
+  ['بدر العنزي', 'Bader Alanazi'],
+  ['نواف السبيعي', 'Nawaf Alsobaie'],
+  ['ماجد الرشيدي', 'Majed Alrashidi'],
+  ['سعود الجهني', 'Saud Aljuhani'],
+]
+
+const femaleStudentNames = [
+  ['ريم الحربي', 'Reem Alharbi'],
+  ['نورة القحطاني', 'Norah Alqahtani'],
+  ['سارة الدوسري', 'Sarah Aldossari'],
+  ['هند العتيبي', 'Hind Alotaibi'],
+  ['لينا الشمري', 'Lina Alshammari'],
+  ['شهد الزهراني', 'Shahad Alzahrani'],
+  ['جود المالكي', 'Joud Almaliki'],
+  ['أمل الغامدي', 'Amal Alghamdi'],
+  ['دانة العنزي', 'Dana Alanazi'],
+  ['غادة السبيعي', 'Ghada Alsobaie'],
+  ['بدور الرشيدي', 'Budoor Alrashidi'],
+  ['منيرة الجهني', 'Munirah Aljuhani'],
+]
+
 function classroomLevelType(code) {
   if (code.startsWith('P')) return 'PRIMARY'
   if (code.startsWith('M')) return 'MIDDLE'
   return 'HIGH'
+}
+
+function deterministicId(...parts) {
+  return createHash('sha256').update(parts.join(':')).digest('hex').slice(0, 24)
+}
+
+function padded(value, length = 8) {
+  return String(value).padStart(length, '0')
+}
+
+function teacherGender(index) {
+  return index % 4 === 1 || index % 4 === 3 ? 'FEMALE' : 'MALE'
+}
+
+function studentCountForClassroom(code) {
+  const grade = Number(code.slice(1, -1))
+  const sectionOffset = code.endsWith('A') ? 0 : 2
+  return 24 + ((grade + sectionOffset) % 5)
 }
 
 async function main() {
@@ -101,10 +172,13 @@ async function main() {
     },
   ]
 
-  for (const data of schools) {
+  let globalTeacherCardSeq = 10000001
+  let globalStudentCardSeq = 10000001
+
+  for (const [schoolIndex, data] of schools.entries()) {
     const school = await prisma.school.upsert({
       where: {
-        id: createHash('sha256').update(data.adminEmail).digest('hex').slice(0, 24),
+        id: deterministicId(data.adminEmail),
       },
       update: {
         name: data.name,
@@ -116,7 +190,7 @@ async function main() {
         status: data.status,
       },
       create: {
-        id: createHash('sha256').update(data.adminEmail).digest('hex').slice(0, 24),
+        id: deterministicId(data.adminEmail),
         schoolCode: data.schoolCode,
         name: data.name,
         logoUrl: data.logoUrl,
@@ -144,7 +218,7 @@ async function main() {
       },
     })
 
-    const subscriptionId = createHash('sha256').update(`${school.id}:subscription`).digest('hex').slice(0, 24)
+    const subscriptionId = deterministicId(school.id, 'subscription')
 
     await prisma.subscription.upsert({
       where: { id: subscriptionId },
@@ -193,7 +267,7 @@ async function main() {
       },
     })
 
-    const academicYearId = createHash('sha256').update(`${school.id}:2026-2027`).digest('hex').slice(0, 24)
+    const academicYearId = deterministicId(school.id, '2026-2027')
 
     const academicYear = await prisma.academicYear.upsert({
       where: {
@@ -218,10 +292,7 @@ async function main() {
     const levelByType = new Map()
 
     for (const level of levelData) {
-      const levelId = createHash('sha256')
-        .update(`${school.id}:${academicYear.id}:${level.levelType}`)
-        .digest('hex')
-        .slice(0, 24)
+      const levelId = deterministicId(school.id, academicYear.id, level.levelType)
 
       const createdLevel = await prisma.schoolLevel.upsert({
         where: {
@@ -244,14 +315,13 @@ async function main() {
       levelByType.set(level.levelType, createdLevel)
     }
 
+    const seededClassrooms = []
+
     for (const code of classroomCodes) {
       const level = levelByType.get(classroomLevelType(code))
-      const classroomId = createHash('sha256')
-        .update(`${school.id}:${academicYear.id}:${code}`)
-        .digest('hex')
-        .slice(0, 24)
+      const classroomId = deterministicId(school.id, academicYear.id, code)
 
-      await prisma.classroom.upsert({
+      const classroom = await prisma.classroom.upsert({
         where: {
           id: classroomId,
         },
@@ -270,6 +340,99 @@ async function main() {
           isActive: true,
         },
       })
+
+      seededClassrooms.push(classroom)
+    }
+
+    for (let i = 0; i < 20; i++) {
+      const [fullNameAr, fullNameEn] = teacherNames[i]
+      const teacherId = deterministicId(school.id, 'teacher', i + 1)
+      const employeeNumber = `${data.schoolCode}-T-${padded(i + 1, 4)}`
+      const gender = teacherGender(i)
+      const teacherCardCode = `TCH-${padded(globalTeacherCardSeq++)}`
+
+      await prisma.teacher.upsert({
+        where: { id: teacherId },
+        update: {
+          employeeNumber,
+          fullNameAr,
+          fullNameEn,
+          nationalId: `${10 + schoolIndex}${padded(i + 1, 8)}`,
+          email: `teacher${padded(i + 1, 2)}@${data.schoolCode.toLowerCase()}.classpulse.test`,
+          phone: `05${schoolIndex + 1}${padded(5000000 + i, 7)}`,
+          gender,
+          status: 'ACTIVE',
+          hireDate: new Date(`202${i % 5}-08-15T00:00:00.000Z`),
+          profilePhotoUrl: null,
+          cardCode: teacherCardCode,
+        },
+        create: {
+          id: teacherId,
+          schoolId: school.id,
+          employeeNumber,
+          fullNameAr,
+          fullNameEn,
+          nationalId: `${10 + schoolIndex}${padded(i + 1, 8)}`,
+          email: `teacher${padded(i + 1, 2)}@${data.schoolCode.toLowerCase()}.classpulse.test`,
+          phone: `05${schoolIndex + 1}${padded(5000000 + i, 7)}`,
+          gender,
+          status: 'ACTIVE',
+          hireDate: new Date(`202${i % 5}-08-15T00:00:00.000Z`),
+          profilePhotoUrl: null,
+          cardCode: teacherCardCode,
+        },
+      })
+    }
+
+    for (const classroom of seededClassrooms) {
+      const count = studentCountForClassroom(classroom.classroomCode)
+      for (let i = 0; i < count; i++) {
+        const gender = i % 2 === 0 ? 'MALE' : 'FEMALE'
+        const namePool = gender === 'MALE' ? maleStudentNames : femaleStudentNames
+        const [baseNameAr, baseNameEn] = namePool[i % namePool.length]
+        const classroomNumber = classroomCodes.indexOf(classroom.classroomCode) + 1
+        const studentNumber = `${data.schoolCode}-S-${padded(classroomNumber, 2)}-${padded(i + 1, 3)}`
+        const studentId = deterministicId(school.id, classroom.id, 'student', i + 1)
+        const fullNameAr = `${baseNameAr} ${classroom.classroomCode}`
+        const fullNameEn = `${baseNameEn} ${classroom.classroomCode}`
+        const studentCardCode = `STD-${padded(globalStudentCardSeq++)}`
+
+        await prisma.student.upsert({
+          where: { id: studentId },
+          update: {
+            classroomId: classroom.id,
+            studentNumber,
+            fullNameAr,
+            fullNameEn,
+            nationalId: `${20 + schoolIndex}${padded(classroomNumber, 2)}${padded(i + 1, 6)}`,
+            gender,
+            birthDate: new Date(`20${12 + (classroomNumber % 7)}-0${(i % 9) + 1}-15T00:00:00.000Z`),
+            guardianName: gender === 'MALE' ? 'ولي الأمر عبدالله' : 'ولية الأمر نورة',
+            guardianPhone: `05${schoolIndex + 5}${padded(6000000 + classroomNumber * 100 + i, 7)}`,
+            guardianEmail: `guardian-${data.schoolCode.toLowerCase()}-${classroom.classroomCode.toLowerCase()}-${padded(i + 1, 2)}@example.test`,
+            profilePhotoUrl: null,
+            cardCode: studentCardCode,
+            status: 'ACTIVE',
+          },
+          create: {
+            id: studentId,
+            schoolId: school.id,
+            classroomId: classroom.id,
+            studentNumber,
+            fullNameAr,
+            fullNameEn,
+            nationalId: `${20 + schoolIndex}${padded(classroomNumber, 2)}${padded(i + 1, 6)}`,
+            gender,
+            birthDate: new Date(`20${12 + (classroomNumber % 7)}-0${(i % 9) + 1}-15T00:00:00.000Z`),
+            guardianName: gender === 'MALE' ? 'ولي الأمر عبدالله' : 'ولية الأمر نورة',
+            guardianPhone: `05${schoolIndex + 5}${padded(6000000 + classroomNumber * 100 + i, 7)}`,
+            guardianEmail: `guardian-${data.schoolCode.toLowerCase()}-${classroom.classroomCode.toLowerCase()}-${padded(i + 1, 2)}@example.test`,
+            profilePhotoUrl: null,
+            cardCode: studentCardCode,
+            status: 'ACTIVE',
+          },
+        })
+      }
     }
   }
 }
