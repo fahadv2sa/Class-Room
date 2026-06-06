@@ -49,6 +49,11 @@ export async function PATCH(request: Request) {
 
     const language = normalizeLanguage(body?.language)
     const noiseThresholdDb = clampNumber(body?.noiseThresholdDb ?? body?.noise_threshold_db, 40, 100)
+    const noiseDurationSeconds = clampNumber(
+      body?.noiseDurationSeconds ?? body?.noise_duration_seconds,
+      1,
+      120,
+    )
     const studentExitLimitMinutes = clampNumber(
       body?.studentExitLimitMinutes ?? body?.student_exit_limit_minutes,
       5,
@@ -65,6 +70,7 @@ export async function PATCH(request: Request) {
       data: {
         language,
         noiseThresholdDb,
+        noiseDurationSeconds,
         studentExitLimitMinutes,
         lateThresholdMinutes,
         noiseAlertsEnabled: optionalBoolean(body?.noiseAlertsEnabled ?? body?.noise_alerts_enabled),

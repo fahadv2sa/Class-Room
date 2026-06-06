@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { StatCard } from '@/components/stat-card'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,46 +10,150 @@ import {
   TeacherQuietBarChart,
 } from '@/components/charts'
 import { useLevel } from '@/components/level-provider'
-import {
-  getNoiseByHour,
-  getNoiseByClass,
-  getNoiseByTeacher,
-  getClassrooms,
-} from '@/lib/mock-data'
 import { Volume2, ArrowUp, ArrowDown, AlertOctagon } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { withLevel } from '@/lib/i18n/ui'
 
 const dayKeys = ['days.sunday', 'days.monday', 'days.tuesday', 'days.wednesday', 'days.thursday']
 const hours = ['07', '08', '09', '10', '11', '12', '01', '02']
+const levelApiValue = { primary: 'PRIMARY', middle: 'MIDDLE', high: 'HIGH' } as const
+const teacherQuietKey = 'هدوء' as const
 
-// deterministic heatmap values
-function heat(d: number, h: number) {
-  return ((d * 13 + h * 7) % 60) + 30
+type NoiseClassroom = {
+  classroomId: string
+  classroomCode: string
+  classroomName: string
+  state: {
+    currentDb: number
+    currentState: 'QUIET' | 'MODERATE' | 'LOUD'
+    activeNoiseEventId: string | null
+    updatedAt: string | null
+  }
+  summary: {
+    totalEvents: number
+    totalNoiseSeconds: number
+    averageEventDb: number
+    peakDb: number
+    lowEvents: number
+    mediumEvents: number
+    highEvents: number
+    quietScore: number
+  }
 }
+
+type NoiseEvent = {
+  id: string
+  classroomId: string
+  startedAt: string
+  averageDb: number
+  peakDb: number
+  severity: 'LOW' | 'MEDIUM' | 'HIGH'
+  status: 'ACTIVE' | 'CLOSED'
+  classroom?: { classroomCode: string }
+}
+
+type TeacherNoiseSummary = {
+  id: string
+  totalEvents: number
+  quietScore: number
+  averageEventDb: number
+  teacher: { fullNameAr: string; fullNameEn: string }
+}
+
 function heatColor(v: number) {
   if (v <= 45) return '#22c55e'
   if (v <= 70) return '#f59e0b'
   return '#ef4444'
 }
 
+function emptyHourData() {
+  return hours.map((hour) => ({ hour, noise: 0 }))
+}
+
 export default function NoisePage() {
   const { level } = useLevel()
-  const { t } = useLanguage()
+  const { language, t } = useLanguage()
+  const [classrooms, setClassrooms] = useState<NoiseClassroom[]>([])
+  const [events, setEvents] = useState<NoiseEvent[]>([])
+  const [teachers, setTeachers] = useState<TeacherNoiseSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!level) return
+    const selectedLevel = level
+
+    async function loadNoiseData() {
+      setLoading(true)
+      setError('')
+      try {
+        const levelParam = levelApiValue[selectedLevel]
+        const [classroomsRes, eventsRes, teachersRes] = await Promise.all([
+          fetch(`/api/noise/classrooms?level=${levelParam}`, { cache: 'no-store' }),
+          fetch('/api/noise/events?pageSize=100', { cache: 'no-store' }),
+          fetch('/api/noise/teachers?pageSize=10', { cache: 'no-store' }),
+        ])
+        if (!classroomsRes.ok || !eventsRes.ok || !teachersRes.ok) throw new Error('Unable to load noise data')
+
+        const classroomsData = await classroomsRes.json()
+        const eventsData = await eventsRes.json()
+        const teachersData = await teachersRes.json()
+        setClassrooms(classroomsData.classrooms ?? [])
+        setEvents(eventsData.events ?? [])
+        setTeachers(teachersData.teachers ?? [])
+      } catch {
+        setError('settings.loadError')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadNoiseData()
+  }, [level])
+
+  const derived = useMemo(() => {
+    const currentValues = classrooms.map((classroom) => classroom.state.currentDb)
+    const summaryValues = classrooms.map((classroom) => classroom.summary.averageEventDb).filter((value) => value > 0)
+    const values = currentValues.length ? currentValues : summaryValues
+    const avg = values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0
+    const max = values.length ? Math.max(...values) : 0
+    const min = values.length ? Math.min(...values) : 0
+    const redHits = classrooms.reduce((sum, classroom) => sum + classroom.summary.highEvents, 0)
+    const quietNow = classrooms.filter((classroom) => classroom.state.currentState === 'QUIET').length
+    const noiseByClass = classrooms
+      .map((classroom) => ({
+        name: classroom.classroomCode,
+        noise: classroom.state.currentDb || classroom.summary.averageEventDb,
+      }))
+      .sort((a, b) => b.noise - a.noise)
+
+    const byHour = emptyHourData()
+    for (const event of events) {
+      const hour = new Date(event.startedAt).getHours().toString().padStart(2, '0')
+      const bucket = byHour.find((item) => item.hour === hour)
+      if (bucket) bucket.noise = Math.max(bucket.noise, event.peakDb || event.averageDb)
+    }
+
+    const teacherQuiet = teachers.map((summary) => ({
+      name: language === 'EN' ? summary.teacher.fullNameEn : summary.teacher.fullNameAr,
+      [teacherQuietKey]: summary.quietScore,
+    }))
+
+    return {
+      avg,
+      max,
+      min,
+      redHits,
+      quietNow,
+      noiseByClass,
+      noiseByHour: byHour,
+      teacherQuiet,
+      quietest: [...noiseByClass].sort((a, b) => a.noise - b.noise).slice(0, 3),
+      loudest: noiseByClass.slice(0, 3),
+    }
+  }, [classrooms, events, language, teachers])
+
   if (!level) return null
-
-  const noiseByHour = getNoiseByHour(level)
-  const noiseByClass = getNoiseByClass(level)
-  const noiseByTeacher = getNoiseByTeacher(level)
-  const classrooms = getClassrooms(level)
-
-  const quietest = [...noiseByClass].reverse().slice(0, 3)
-  const loudest = noiseByClass.slice(0, 3)
-  const redHits = classrooms.filter((c) => c.noise > 70).length
-  const noiseValues = classrooms.map((c) => c.noise)
-  const avg = Math.round(noiseValues.reduce((a, b) => a + b, 0) / noiseValues.length)
-  const max = Math.max(...noiseValues)
-  const min = Math.min(...noiseValues)
 
   return (
     <DashboardShell
@@ -56,12 +161,23 @@ export default function NoisePage() {
       subtitle={withLevel('noise.subtitle', level, t)}
     >
       <div className="space-y-6">
+        {loading && (
+          <Card className="p-4 text-sm font-semibold text-muted-foreground">
+            {t('common.loading')}
+          </Card>
+        )}
+        {error && (
+          <Card className="p-4 text-sm font-semibold text-destructive">
+            {t(error)}
+          </Card>
+        )}
+
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-          <StatCard label={t('noise.avgToday')} value={avg} unit="dB" icon={Volume2} tone="warning" />
-          <StatCard label={t('noise.highest')} value={max} unit="dB" icon={ArrowUp} tone="danger" />
-          <StatCard label={t('noise.lowest')} value={min} unit="dB" icon={ArrowDown} tone="success" />
-          <StatCard label={t('noise.redHits')} value={redHits} icon={AlertOctagon} tone="danger" />
-          <StatCard label={t('noise.quietNow')} value={classrooms.filter((c) => c.noise <= 45).length} icon={Volume2} tone="success" />
+          <StatCard label={t('noise.avgToday')} value={derived.avg} unit="dB" icon={Volume2} tone="warning" />
+          <StatCard label={t('noise.highest')} value={derived.max} unit="dB" icon={ArrowUp} tone="danger" />
+          <StatCard label={t('noise.lowest')} value={derived.min} unit="dB" icon={ArrowDown} tone="success" />
+          <StatCard label={t('noise.redHits')} value={derived.redHits} icon={AlertOctagon} tone="danger" />
+          <StatCard label={t('noise.quietNow')} value={derived.quietNow} icon={Volume2} tone="success" />
         </div>
 
         <Card>
@@ -69,7 +185,7 @@ export default function NoisePage() {
             <CardTitle>{t('noise.byHour')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <NoiseAreaChart data={noiseByHour} />
+            <NoiseAreaChart data={derived.noiseByHour} />
           </CardContent>
         </Card>
 
@@ -79,7 +195,7 @@ export default function NoisePage() {
               <CardTitle>{t('noise.byClass')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <NoiseRankBarChart data={noiseByClass.slice(0, 10)} />
+              <NoiseRankBarChart data={derived.noiseByClass.slice(0, 10)} />
             </CardContent>
           </Card>
           <Card>
@@ -87,12 +203,11 @@ export default function NoisePage() {
               <CardTitle>{t('noise.byTeacher')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <TeacherQuietBarChart data={noiseByTeacher} />
+              <TeacherQuietBarChart data={derived.teacherQuiet} />
             </CardContent>
           </Card>
         </div>
 
-        {/* Heatmap */}
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>{t('noise.heatmap')}</CardTitle>
@@ -117,14 +232,20 @@ export default function NoisePage() {
                     className="mb-1.5 grid grid-cols-[80px_repeat(8,1fr)] items-center gap-1.5"
                   >
                     <span className="text-xs font-semibold text-muted-foreground">{t(dayKey)}</span>
-                    {hours.map((_, hi) => {
-                      const v = heat(di, hi)
+                    {hours.map((hour, hi) => {
+                      const eventValue = events
+                        .filter((event) => {
+                          const date = new Date(event.startedAt)
+                          return date.getDay() === di && date.getHours().toString().padStart(2, '0') === hour
+                        })
+                        .reduce((peak, event) => Math.max(peak, event.peakDb), 0)
+                      const v = eventValue || 0
                       return (
                         <div
                           key={hi}
                           className="flex h-9 items-center justify-center rounded-md text-[11px] font-bold text-white/90"
                           style={{ backgroundColor: heatColor(v) }}
-                          title={`${t(dayKey)} ${hours[hi]} - ${v} dB`}
+                          title={`${t(dayKey)} ${hour} - ${v} dB`}
                         >
                           {v}
                         </div>
@@ -138,8 +259,8 @@ export default function NoisePage() {
         </Card>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <RankList title={t('dashboard.quietestClasses')} items={quietest} tone="success" />
-          <RankList title={t('dashboard.loudestClasses')} items={loudest} tone="danger" />
+          <RankList title={t('dashboard.quietestClasses')} items={derived.quietest} tone="success" />
+          <RankList title={t('dashboard.loudestClasses')} items={derived.loudest} tone="danger" />
         </div>
       </div>
     </DashboardShell>

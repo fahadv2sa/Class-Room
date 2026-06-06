@@ -66,6 +66,8 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2D Classroom Device Foundation
 - Phase 2E RFID Attendance Engine Foundation
 - Phase 2F Classroom Presence & Movement Foundation
+- Phase 2F.1 Direction & Session Integrity Correction
+- Phase 2G Live Noise Monitoring, Classroom Averages & Teacher-Linked Noise Scoring Foundation
 
 ### In Progress
 
@@ -73,7 +75,6 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 
 ### Planned
 
-- Phase 2G Noise Monitoring
 - Phase 2H Reporting
 - Phase 3.0 AI Layer
 
@@ -465,6 +466,104 @@ Not implemented:
 - School-wide gate attendance.
 - Teacher schedule management.
 
+### Phase 2F.1: Direction & Session Integrity Correction
+
+Objective:
+
+Correct RFID direction inference and attendance session date isolation while preserving the one-device classroom architecture.
+
+Implemented:
+
+- Server-side RFID direction inference from current presence state.
+- First valid scan in a session is treated as `ENTRY`.
+- `INSIDE_CLASSROOM` scans are treated as `EXIT`.
+- `OUTSIDE_CLASSROOM`, `ABSENT`, or no state scans are treated as `ENTRY`.
+- Open attendance sessions are date-safe.
+- Previous-day open classroom sessions are closed before a new dated session is used.
+
+Major architectural decisions:
+
+- The system does not require direction sensors, dual readers, entry readers, exit readers, timetable logic, or AI to infer classroom entry and exit.
+- Missed scans may affect one user in one attendance session, but future sessions remain isolated.
+- Existing RFID, attendance, presence, and movement models were preserved.
+
+APIs added:
+
+- No new API was added in Phase 2F.1.
+
+Database entities added:
+
+- No database entity was added in Phase 2F.1.
+
+### Phase 2G: Live Noise Monitoring, Classroom Averages & Teacher-Linked Noise Scoring Foundation
+
+Objective:
+
+Create the live classroom noise monitoring foundation using the existing integrated Class-Room Device without storing raw continuous noise readings.
+
+Implemented:
+
+- `NoiseEvent` for significant classroom noise incidents only.
+- `ClassroomNoiseState` for current live classroom noise status.
+- `ClassroomNoiseSummary` for daily classroom noise metrics.
+- `TeacherNoiseSummary` for daily teacher-linked noise metrics.
+- Per-school `SchoolSettings.noise_duration_seconds`.
+- Noise reading ingestion/simulation API.
+- Event creation only after noise stays above threshold for the configured duration.
+- Active noise event closure when noise returns below threshold.
+- Classroom summary recalculation when events close.
+- Teacher summary recalculation when teacher-linked events close.
+- Existing Noise page connected to database-backed noise APIs while keeping the approved layout.
+
+Major architectural decisions:
+
+- Noise data comes from the existing integrated `ClassroomDevice`.
+- No separate noise device, standalone sensor, gateway, or hardware model was created.
+- Continuous device readings are not stored as permanent raw rows.
+- Persistent storage is event-based, summary-based, and current-state based.
+- `NoiseEvent.teacher_id` is linked from `TeacherPresenceState` when a teacher is currently `INSIDE_CLASSROOM`.
+- `NoiseEvent.attendance_session_id` links to the current open classroom attendance session when available.
+- The quiet score is a foundation metric only, not a final report or teacher ranking.
+- No AI, predictive analytics, final reporting engine, automated decisions, or disciplinary scoring were added.
+
+Quiet score formula:
+
+- Start from `100`.
+- Subtract `total_noise_seconds / 60`.
+- Subtract `5` points per high-severity event.
+- Subtract `0.5` points for each dB above `70` at daily peak.
+- Clamp result from `0` to `100`.
+
+APIs added:
+
+- `POST /api/noise/readings`
+- `GET /api/noise/events`
+- `GET /api/noise/classrooms`
+- `GET /api/noise/classrooms/[classroomId]`
+- `GET /api/noise/teachers`
+
+Database entities added:
+
+- `NoiseEvent`
+- `ClassroomNoiseState`
+- `ClassroomNoiseSummary`
+- `TeacherNoiseSummary`
+
+Database changes:
+
+- `SchoolSettings.noise_duration_seconds`
+
+Not implemented:
+
+- Raw per-second or per-millisecond noise storage.
+- Separate noise sensor or noise device model.
+- AI.
+- Final classroom ranking UI.
+- Final teacher ranking UI.
+- Reports engine.
+- PDF exports.
+- Automated disciplinary decisions.
+
 ---
 
 ## 3. System Architecture
@@ -556,6 +655,7 @@ Migrations:
 - `20260606160000_classroom_device_foundation`
 - `20260606170000_rfid_attendance_engine_foundation`
 - `20260606180000_classroom_presence_movement_foundation`
+- `20260607100000_live_noise_monitoring_foundation`
 
 ### Authentication
 
@@ -1189,6 +1289,16 @@ Permission terms:
 | GET | `/api/movements/students/[studentId]` | List movement records for one student | Tenant scoped |
 | GET | `/api/movements/teachers` | List derived teacher movement records | Tenant scoped |
 
+### Noise
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| POST | `/api/noise/readings` | Ingest or simulate current noise reading from an integrated classroom device | Tenant scoped |
+| GET | `/api/noise/events` | List significant noise events with filters and pagination | Tenant scoped |
+| GET | `/api/noise/classrooms` | List classroom live noise states and daily summaries | Tenant scoped |
+| GET | `/api/noise/classrooms/[classroomId]` | Show one classroom noise state, summary, and recent events | Tenant scoped |
+| GET | `/api/noise/teachers` | List teacher-linked daily noise summaries | Tenant scoped |
+
 ### Teachers
 
 | Method | Route | Purpose | Permissions |
@@ -1447,7 +1557,7 @@ Not implemented:
 - Production hardware RFID scanning.
 - Device-authenticated attendance ingestion.
 - Classroom presence and movement state are implemented in Phase 2F from RFIDScanEvent.
-- Noise telemetry processing.
+- Live noise monitoring is implemented in Phase 2G.
 
 Note:
 
@@ -1606,18 +1716,15 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2D Classroom Device Foundation
 - Phase 2E RFID Attendance Engine Foundation
 - Phase 2F Classroom Presence & Movement Foundation
+- Phase 2F.1 Direction & Session Integrity Correction
+- Phase 2G Live Noise Monitoring, Classroom Averages & Teacher-Linked Noise Scoring Foundation
 
 ### Next
 
-- Phase 2G Noise Monitoring
 - Phase 2H Reporting
 - Phase 3.0 AI Layer
 
 ### Planned Detail
-
-Phase 2G Noise Monitoring:
-
-- Intended to add noise telemetry processing from the integrated Class-Room Device.
 
 Phase 2H Reporting:
 

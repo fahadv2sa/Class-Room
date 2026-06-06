@@ -3,6 +3,7 @@ import type { Language } from '@prisma/client'
 export const defaultSchoolSettings = {
   language: 'AR' as Language,
   noiseThresholdDb: 70,
+  noiseDurationSeconds: 10,
   studentExitLimitMinutes: 10,
   lateThresholdMinutes: 10,
   noiseAlertsEnabled: true,
