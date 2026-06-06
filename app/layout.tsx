@@ -12,9 +12,9 @@ const cairo = Cairo({
 })
 
 export const metadata: Metadata = {
-  title: 'ClassPulse AI | منصة إدارة الفصول الذكية',
+  title: 'ClassPulse AI | Smart Classroom Management Platform',
   description:
-    'منصة ذكية لإدارة الفصول والانضباط المدرسي — مراقبة الضوضاء، الحضور الإلكتروني، وحركة الطلاب.',
+    'Bilingual smart classroom management platform for school discipline, noise monitoring, electronic attendance, and student movement.',
   generator: 'v0.app',
 }
 
@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ar" dir="rtl" className={cairo.variable}>
+    <html lang="ar" dir="rtl" className={cairo.variable} suppressHydrationWarning>
       <body className="bg-background font-sans antialiased">
         <LanguageProvider>
           <LevelProvider>{children}</LevelProvider>
