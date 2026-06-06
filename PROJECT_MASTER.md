@@ -28,7 +28,7 @@ ClassPulse AI
 
 ### Purpose
 
-ClassPulse AI is a school operations platform for smart classroom management. The current repository implements the SaaS, authentication, tenant, academic structure, settings, language, teacher, and student foundations that later operational modules will use.
+ClassPulse AI is a school operations platform for smart classroom management. The current repository implements the SaaS, authentication, tenant, academic structure, settings, language, teacher, student, and classroom device foundations that later operational modules will use.
 
 ### Vision
 
@@ -49,7 +49,7 @@ Future user categories are not implemented yet.
 
 ### Long-Term Direction
 
-The platform is moving from a dashboard prototype toward a production SaaS system. The current architecture is tenant-first and prepares for devices, RFID/NFC identity, attendance, movement tracking, reports, and AI, but those modules are not implemented yet unless explicitly listed as completed in this document.
+The platform is moving from a dashboard prototype toward a production SaaS system. The current architecture is tenant-first and includes a classroom device foundation that prepares for RFID/NFC identity, attendance, movement tracking, reports, and AI, but those later modules are not implemented yet unless explicitly listed as completed in this document.
 
 ---
 
@@ -63,6 +63,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2B.5 Settings Persistence + Language Foundation
 - Phase 2C Teachers and Students Foundation
 - Phase 2B.6R Native Internationalization Refactor
+- Phase 2D Classroom Device Foundation
 
 ### In Progress
 
@@ -70,7 +71,6 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 
 ### Planned
 
-- Phase 2D Devices Foundation
 - Phase 2E RFID + Attendance
 - Phase 2F Movement Tracking
 - Phase 2G Reporting
@@ -320,6 +320,40 @@ Database entities added:
 
 - No database entity was added in Phase 2B.6R.
 
+### Phase 2D: Classroom Device Foundation
+
+Objective:
+
+Create the software foundation for one integrated Class-Room Device per classroom without starting RFID attendance, movement tracking, noise telemetry processing, reports, or AI.
+
+Implemented:
+
+- `ClassroomDevice` database model.
+- Permanent globally unique `device_code` using `CRD-########`.
+- Device serial number, firmware version, hardware version, lifecycle status, connection status, capabilities, installation, registration, last-seen, retirement, notes, and provisioning metadata.
+- Tenant-scoped classroom device APIs.
+- Database-backed Devices page data loading.
+- Seeded one realistic Class-Room Device for every seeded classroom.
+
+Major architectural decisions:
+
+- A Class-Room Device is one integrated classroom device mounted near the classroom door.
+- RFID reader, noise sensor, LED indicators, connectivity, local controller, firmware, and future expansion are capabilities of the integrated Class-Room Device.
+- The platform must not model separate RFID reader, noise sensor, LED, or gateway entities in this phase.
+- Device lifecycle status and connection status are separate concepts. For example, an `ACTIVE` device may be `OFFLINE`.
+- Internal relations use `school_id`, `classroom_id`, and the device primary key. `device_code` is a permanent human-readable support/provisioning identifier.
+
+APIs added:
+
+- `GET /api/classroom-devices`
+- `POST /api/classroom-devices`
+- `GET /api/classroom-devices/[deviceId]`
+- `PATCH /api/classroom-devices/[deviceId]`
+
+Database entities added:
+
+- `ClassroomDevice`
+
 ---
 
 ## 3. System Architecture
@@ -539,7 +573,7 @@ Tenant root record.
 
 Key relationships:
 
-- Owns SchoolAdmins, SchoolSettings, AcademicYears, SchoolLevels, Classrooms, Teachers, Students, Subscriptions, and Sessions.
+- Owns SchoolAdmins, SchoolSettings, AcademicYears, SchoolLevels, Classrooms, ClassroomDevices, Teachers, Students, Subscriptions, and Sessions.
 
 Important constraints:
 
@@ -626,11 +660,35 @@ Key relationships:
 - Belongs to AcademicYear.
 - Belongs to SchoolLevel.
 - Has Students.
+- Has ClassroomDevices.
 
 Important constraints:
 
 - Unique `school_id + academic_year_id + classroom_code`.
 - `classroom_code` is the platform operational classroom identifier.
+
+### ClassroomDevice
+
+Purpose:
+
+Integrated Class-Room Device installed for one classroom.
+
+Key relationships:
+
+- Belongs to School.
+- Belongs to Classroom.
+
+Important constraints:
+
+- Unique immutable `device_code` using `CRD-########`.
+- Unique `serial_number`.
+- Every device includes `school_id` for tenant isolation.
+- Every device includes `classroom_id`.
+- A partial database unique index allows only one `ACTIVE` device per classroom while preserving retired historical devices.
+- `status` is `ACTIVE`, `MAINTENANCE`, or `RETIRED`.
+- `connection_status` is `ONLINE`, `OFFLINE`, or `UNKNOWN`.
+- `capabilities` stores future-safe integrated device capabilities such as `RFID`, `NOISE_MONITORING`, `LED_INDICATORS`, and `FIRMWARE_UPDATES`.
+- Provisioning metadata stores hashes and timestamps only; raw pairing tokens must not be stored.
 
 ### Teacher
 
@@ -797,6 +855,15 @@ Permission terms:
 | POST | `/api/classrooms` | Create classroom | Tenant scoped with writable school |
 | GET | `/api/classrooms/[classroomId]` | Get classroom | Tenant scoped |
 | PATCH | `/api/classrooms/[classroomId]` | Update classroom | Tenant scoped |
+
+### Classroom Devices
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| GET | `/api/classroom-devices` | List classroom devices with pagination, search, classroom, status, and connection filters | Tenant scoped |
+| POST | `/api/classroom-devices` | Register an integrated Class-Room Device and assign it to a classroom | Tenant scoped with writable school |
+| GET | `/api/classroom-devices/[deviceId]` | Get one classroom device | Tenant scoped |
+| PATCH | `/api/classroom-devices/[deviceId]` | Update classroom assignment, firmware/hardware metadata, status, connection status, notes, capabilities, and provisioning metadata | Tenant scoped |
 
 ### Teachers
 
@@ -966,7 +1033,7 @@ These rules are mandatory for future AI tools and developers.
 13. Do not scatter hardcoded bilingual conditionals across pages.
 14. Do not create new database entities unless the phase explicitly requires them.
 15. Do not start future phases early.
-16. Do not implement devices, RFID, attendance engine, reports engine, or AI unless explicitly requested.
+16. Do not extend beyond the implemented classroom device foundation into RFID, attendance engine, reports engine, or AI unless explicitly requested.
 17. Preserve `school_code` as permanent and unique.
 18. Use `school_id` internally for foreign keys.
 19. Preserve card identity formats.
@@ -1020,30 +1087,45 @@ Rules:
 
 ## 11. Device Roadmap
 
-Status: planned, not implemented.
+Status: Phase 2D foundation implemented.
 
-Intended purpose:
+Implemented purpose:
 
-Create a device foundation for smart classroom hardware such as sound sensors, RFID readers, and gateway devices.
+Create the software foundation for the integrated Class-Room Device that belongs to a school and classroom.
 
-Planned architecture direction:
+Implemented architecture:
 
-- Devices should belong to a school through `school_id`.
-- Devices should optionally attach to a classroom through `classroom_id`.
-- Provisioning may use `school_code` as a human-readable identifier.
-- Internal relations should still use `school_id`.
-- Device status, firmware, serial numbers, and hardware capabilities should be modeled explicitly when the device phase begins.
+- The Class-Room Device is one integrated physical classroom device, not a collection of independent hardware entities.
+- The device is mounted near the classroom door.
+- The device may contain RFID reader capability, noise monitoring capability, LED indicator capability, connectivity, local controller, firmware, and future expansion capability.
+- RFID readers, noise sensors, LED indicators, and gateways must not be modeled as separate entities in Phase 2D.
+- Every device belongs to one school through `school_id`.
+- Every device belongs to one classroom through `classroom_id`.
+- A classroom can have only one `ACTIVE` device at a time.
+- Internal relations use the device primary key, `school_id`, and `classroom_id`.
+- `device_code` is a permanent, immutable, human-readable identifier for support and future provisioning.
+- Capabilities are metadata only in Phase 2D and do not implement RFID, noise telemetry, LED behavior, or firmware delivery.
+
+Implemented:
+
+- Device database model.
+- Device API.
+- Tenant isolation for device reads and writes.
+- Database-backed `/devices` page.
+- Provisioning metadata fields.
 
 Not implemented:
 
-- Device database model.
-- Device provisioning.
-- Device API.
+- Provisioning workflow.
 - Live device telemetry ingestion.
+- RFID scanning.
+- Attendance calculation.
+- Movement tracking.
+- Noise telemetry processing.
 
 Note:
 
-The current `/devices` page exists as part of the dashboard experience and uses mock data.
+The current `/devices` page keeps the approved dashboard layout and now loads classroom device identity and health metadata from the database. It does not display or process live telemetry.
 
 ---
 
@@ -1167,20 +1249,16 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2B.5 Settings Persistence + Language Foundation
 - Phase 2C Teachers and Students Foundation
 - Phase 2B.6R Native Internationalization Refactor
+- Phase 2D Classroom Device Foundation
 
 ### Next
 
-- Phase 2D Devices Foundation
 - Phase 2E RFID + Attendance
 - Phase 2F Movement Tracking
 - Phase 2G Reporting
 - Phase 3.0 AI Layer
 
 ### Planned Detail
-
-Phase 2D Devices Foundation:
-
-- Intended to add device models, provisioning architecture, and tenant-isolated device APIs.
 
 Phase 2E RFID + Attendance:
 

@@ -174,6 +174,7 @@ async function main() {
 
   let globalTeacherCardSeq = 10000001
   let globalStudentCardSeq = 10000001
+  let globalDeviceSeq = 10000001
 
   for (const [schoolIndex, data] of schools.entries()) {
     const school = await prisma.school.upsert({
@@ -342,6 +343,60 @@ async function main() {
       })
 
       seededClassrooms.push(classroom)
+    }
+
+    for (const classroom of seededClassrooms) {
+      const classroomNumber = classroomCodes.indexOf(classroom.classroomCode) + 1
+      const deviceId = deterministicId(school.id, classroom.id, 'class-room-device')
+      const deviceCode = `CRD-${padded(globalDeviceSeq++)}`
+      const serialNumber = `${data.schoolCode}-CRD-${padded(classroomNumber, 4)}`
+      const connectionStatus = classroomNumber % 11 === 0 ? 'OFFLINE' : classroomNumber % 17 === 0 ? 'UNKNOWN' : 'ONLINE'
+      const status = classroomNumber % 19 === 0 ? 'MAINTENANCE' : 'ACTIVE'
+      const installedAt = new Date('2026-08-10T08:00:00.000Z')
+      const lastSeenAt = connectionStatus === 'ONLINE' ? new Date('2026-09-01T09:30:00.000Z') : null
+
+      await prisma.classroomDevice.upsert({
+        where: { id: deviceId },
+        update: {
+          classroomId: classroom.id,
+          serialNumber,
+          firmwareVersion: classroomNumber % 7 === 0 ? '2.0.4' : '2.1.0',
+          hardwareVersion: 'CRD-HW-1.0',
+          status,
+          connectionStatus,
+          capabilities: ['RFID', 'NOISE_MONITORING', 'LED_INDICATORS', 'FIRMWARE_UPDATES'],
+          installedAt,
+          registeredAt: installedAt,
+          lastSeenAt,
+          retiredAt: null,
+          notes: null,
+          provisionedAt: installedAt,
+          provisionedBy: 'seed',
+          pairingTokenHash: null,
+          pairingTokenExpiresAt: null,
+        },
+        create: {
+          id: deviceId,
+          schoolId: school.id,
+          classroomId: classroom.id,
+          deviceCode,
+          serialNumber,
+          firmwareVersion: classroomNumber % 7 === 0 ? '2.0.4' : '2.1.0',
+          hardwareVersion: 'CRD-HW-1.0',
+          status,
+          connectionStatus,
+          capabilities: ['RFID', 'NOISE_MONITORING', 'LED_INDICATORS', 'FIRMWARE_UPDATES'],
+          installedAt,
+          registeredAt: installedAt,
+          lastSeenAt,
+          retiredAt: null,
+          notes: null,
+          provisionedAt: installedAt,
+          provisionedBy: 'seed',
+          pairingTokenHash: null,
+          pairingTokenExpiresAt: null,
+        },
+      })
     }
 
     for (let i = 0; i < 20; i++) {

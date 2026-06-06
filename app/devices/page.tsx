@@ -1,21 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { StatCard } from '@/components/stat-card'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Segmented } from '@/components/ui/segmented'
 import { useLevel } from '@/components/level-provider'
-import { getDevices, levelMap, type Device } from '@/lib/mock-data'
+import { levelMap } from '@/lib/mock-data'
 import { useLanguage } from '@/components/language-provider'
-import { percent, withLevel } from '@/lib/i18n/ui'
+import { withLevel } from '@/lib/i18n/ui'
 import {
   Cpu,
   Wifi,
   WifiOff,
-  BatteryFull,
-  BatteryLow,
   Volume2,
   ScanLine,
   CircleCheck,
@@ -23,37 +21,91 @@ import {
   CircleX,
 } from 'lucide-react'
 
-const sensorMeta: Record<
-  Device['soundSensor'],
+type ClassroomDevice = {
+  id: string
+  deviceCode: string
+  serialNumber: string
+  firmwareVersion: string
+  hardwareVersion: string
+  status: 'ACTIVE' | 'MAINTENANCE' | 'RETIRED'
+  connectionStatus: 'ONLINE' | 'OFFLINE' | 'UNKNOWN'
+  capabilities: string[]
+  lastSeenAt: string | null
+  classroom: {
+    id: string
+    classroomCode: string
+    classroomName: string
+  }
+}
+
+const connectionMeta: Record<
+  ClassroomDevice['connectionStatus'],
+  { icon: typeof Wifi; badge: 'success' | 'danger' | 'outline'; labelKey: string; color: string }
+> = {
+  ONLINE: { icon: Wifi, badge: 'success', labelKey: 'classrooms.online', color: '#22c55e' },
+  OFFLINE: { icon: WifiOff, badge: 'danger', labelKey: 'classrooms.offline', color: '#ef4444' },
+  UNKNOWN: { icon: CircleAlert, badge: 'outline', labelKey: 'devices.unknown', color: '#f59e0b' },
+}
+
+const statusMeta: Record<
+  ClassroomDevice['status'],
   { icon: typeof CircleCheck; tone: string; labelKey: string }
 > = {
-  ok: { icon: CircleCheck, tone: 'text-success', labelKey: 'devices.working' },
-  warn: { icon: CircleAlert, tone: 'text-[#b45309]', labelKey: 'devices.warning' },
-  fail: { icon: CircleX, tone: 'text-destructive', labelKey: 'devices.fault' },
+  ACTIVE: { icon: CircleCheck, tone: 'text-success', labelKey: 'devices.active' },
+  MAINTENANCE: { icon: CircleAlert, tone: 'text-[#b45309]', labelKey: 'devices.maintenance' },
+  RETIRED: { icon: CircleX, tone: 'text-muted-foreground', labelKey: 'devices.retired' },
 }
 
 const filters = [
   { value: 'all', labelKey: 'common.all' },
-  { value: 'online', labelKey: 'classrooms.online' },
-  { value: 'offline', labelKey: 'classrooms.offline' },
+  { value: 'ONLINE', labelKey: 'classrooms.online' },
+  { value: 'OFFLINE', labelKey: 'classrooms.offline' },
+  { value: 'UNKNOWN', labelKey: 'devices.unknown' },
 ]
 
 export default function DevicesPage() {
   const { level } = useLevel()
   const [filter, setFilter] = useState('all')
+  const [devices, setDevices] = useState<ClassroomDevice[]>([])
+  const [loading, setLoading] = useState(true)
   const { t } = useLanguage()
 
   const lvl = level ? levelMap[level] : null
-  const devices = level ? getDevices(level) : []
 
-  const list = devices.filter((d) =>
-    filter === 'all' ? true : d.status === filter,
+  useEffect(() => {
+    let active = true
+
+    async function loadDevices() {
+      try {
+        setLoading(true)
+        const res = await fetch('/api/classroom-devices?pageSize=100', { cache: 'no-store' })
+        if (!res.ok) throw new Error('Could not load devices')
+        const data = await res.json()
+        if (active) setDevices(data.devices ?? [])
+      } catch {
+        if (active) setDevices([])
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    loadDevices()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const scopedDevices = useMemo(() => {
+    if (!level || !lvl) return []
+    return devices.filter((device) => device.classroom.classroomCode.startsWith(lvl.code))
+  }, [devices, level, lvl])
+
+  const list = scopedDevices.filter((d) =>
+    filter === 'all' ? true : d.connectionStatus === filter,
   )
-  const online = devices.filter((d) => d.status === 'online').length
-  const lowBattery = devices.filter((d) => d.battery < 25).length
-  const faulty = devices.filter(
-    (d) => d.soundSensor !== 'ok' || d.cardReader !== 'ok',
-  ).length
+  const online = scopedDevices.filter((d) => d.connectionStatus === 'ONLINE').length
+  const offline = scopedDevices.filter((d) => d.connectionStatus === 'OFFLINE').length
+  const maintenance = scopedDevices.filter((d) => d.status === 'MAINTENANCE').length
 
   if (!level || !lvl) return null
 
@@ -64,10 +116,10 @@ export default function DevicesPage() {
     >
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label={t('devices.total')} value={devices.length} icon={Cpu} tone="accent" />
-          <StatCard label={t('devices.onlineNow')} value={online} unit={`/ ${devices.length}`} icon={Wifi} tone="success" />
-          <StatCard label={t('devices.lowBattery')} value={lowBattery} icon={BatteryLow} tone="warning" />
-          <StatCard label={t('devices.needsMaintenance')} value={faulty} icon={CircleAlert} tone="danger" />
+          <StatCard label={t('devices.total')} value={scopedDevices.length} icon={Cpu} tone="accent" />
+          <StatCard label={t('devices.onlineNow')} value={online} unit={`/ ${scopedDevices.length}`} icon={Wifi} tone="success" />
+          <StatCard label={t('devices.offlineNow')} value={offline} icon={WifiOff} tone="danger" />
+          <StatCard label={t('devices.needsMaintenance')} value={maintenance} icon={CircleAlert} tone="warning" />
         </div>
 
         <div className="flex items-center justify-between">
@@ -76,18 +128,27 @@ export default function DevicesPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {loading && (
+            <Card className="p-5 text-sm font-semibold text-muted-foreground">
+              {t('common.loading')}
+            </Card>
+          )}
+          {!loading && list.length === 0 && (
+            <Card className="p-5 text-sm font-semibold text-muted-foreground">
+              {t('devices.empty')}
+            </Card>
+          )}
           {list.map((d) => {
-            const sound = sensorMeta[d.soundSensor]
-            const reader = sensorMeta[d.cardReader]
-            const SoundIcon = sound.icon
-            const ReaderIcon = reader.icon
-            const lowBat = d.battery < 25
+            const connection = connectionMeta[d.connectionStatus]
+            const status = statusMeta[d.status]
+            const ConnectionIcon = connection.icon
+            const StatusIcon = status.icon
             return (
               <Card
                 key={d.id}
                 className="p-5"
                 style={{
-                  boxShadow: `inset 4px 0 0 ${d.status === 'online' ? '#22c55e' : '#ef4444'}`,
+                  boxShadow: `inset 4px 0 0 ${connection.color}`,
                 }}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -96,53 +157,40 @@ export default function DevicesPage() {
                       <Cpu className="size-5 text-foreground" />
                     </div>
                     <div className="leading-tight">
-                      <p className="font-extrabold">{d.classroom}</p>
+                      <p className="font-extrabold">{d.classroom.classroomCode}</p>
                       <p className="font-mono text-[11px] text-muted-foreground" dir="ltr">
-                        {d.serial}
+                        {d.deviceCode}
                       </p>
                     </div>
                   </div>
-                  {d.status === 'online' ? (
-                    <Badge variant="success"><Wifi className="size-3" /> {t('classrooms.online')}</Badge>
-                  ) : (
-                    <Badge variant="danger"><WifiOff className="size-3" /> {t('classrooms.offline')}</Badge>
-                  )}
+                  <Badge variant={connection.badge}>
+                    <ConnectionIcon className="size-3" /> {t(connection.labelKey)}
+                  </Badge>
                 </div>
 
                 <div className="mt-4 space-y-2.5 text-sm">
                   <Row
-                    icon={lowBat ? BatteryLow : BatteryFull}
-                    iconTone={lowBat ? 'text-destructive' : 'text-success'}
-                    label={t('devices.battery')}
+                    icon={StatusIcon}
+                    iconTone={status.tone}
+                    label={t('common.status')}
                   >
-                    <span className="flex items-center gap-2">
-                      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-border">
-                        <span
-                          className="block h-full rounded-full"
-                          style={{
-                            width: `${d.battery}%`,
-                            backgroundColor: lowBat ? '#ef4444' : '#22c55e',
-                          }}
-                        />
-                      </span>
-                      <span className="font-bold tabular-nums">{percent(d.battery, t)}</span>
+                    <span className={`flex items-center gap-1 font-semibold ${status.tone}`}>
+                      {t(status.labelKey)}
                     </span>
                   </Row>
-                  <Row icon={Volume2} iconTone="text-muted-foreground" label={t('devices.soundSensor')}>
-                    <span className={`flex items-center gap-1 font-semibold ${sound.tone}`}>
-                      <SoundIcon className="size-4" /> {t(sound.labelKey)}
-                    </span>
+                  <Row icon={ScanLine} iconTone="text-muted-foreground" label={t('devices.serialNumber')}>
+                    <span className="font-mono text-xs font-semibold" dir="ltr">{d.serialNumber}</span>
                   </Row>
-                  <Row icon={ScanLine} iconTone="text-muted-foreground" label={t('devices.cardReader')}>
-                    <span className={`flex items-center gap-1 font-semibold ${reader.tone}`}>
-                      <ReaderIcon className="size-4" /> {t(reader.labelKey)}
+                  <Row icon={Volume2} iconTone="text-muted-foreground" label={t('devices.capabilities')}>
+                    <span className="max-w-[9rem] truncate text-end font-semibold">
+                      {d.capabilities.map((capability) => t(`devices.capability.${capability}`)).join(' / ')}
                     </span>
                   </Row>
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-xs text-muted-foreground">
-                  <span>{t('devices.lastData')}: {d.lastData}</span>
-                  <span className="font-mono" dir="ltr">{d.firmware}</span>
+                  <span>{t('devices.lastSeen')}: {formatDate(d.lastSeenAt, t('devices.notSeen'))}</span>
+                  <span className="font-mono" dir="ltr">{d.firmwareVersion} / {d.hardwareVersion}</span>
                 </div>
               </Card>
             )
@@ -151,6 +199,14 @@ export default function DevicesPage() {
       </div>
     </DashboardShell>
   )
+}
+
+function formatDate(value: string | null, fallback: string) {
+  if (!value) return fallback
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
 }
 
 function Row({

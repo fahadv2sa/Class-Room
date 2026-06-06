@@ -67,6 +67,18 @@ enum StudentStatus {
   TRANSFERRED
 }
 
+enum ClassroomDeviceStatus {
+  ACTIVE
+  MAINTENANCE
+  RETIRED
+}
+
+enum ConnectionStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+
 model SuperAdmin {
   id                           String                      @id @default(cuid())
   email                        String                      @unique
@@ -115,6 +127,7 @@ model School {
   settings           SchoolSettings?
   teachers           Teacher[]
   students           Student[]
+  classroomDevices   ClassroomDevice[]
 
   @@index([status])
   @@index([subscriptionStatus])
@@ -191,13 +204,47 @@ model Classroom {
   academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
   level          SchoolLevel  @relation(fields: [levelId], references: [id], onDelete: Restrict)
   students       Student[]
+  classroomDevices ClassroomDevice[]
 
   @@unique([schoolId, academicYearId, classroomCode])
+  @@unique([id, schoolId])
   @@index([schoolId])
   @@index([academicYearId])
   @@index([levelId])
   @@index([schoolId, isActive])
   @@map("classrooms")
+}
+
+model ClassroomDevice {
+  id                    String                @id @default(cuid())
+  schoolId              String                @map("school_id")
+  classroomId           String                @map("classroom_id")
+  deviceCode            String                @unique @map("device_code")
+  serialNumber          String                @unique @map("serial_number")
+  firmwareVersion       String                @map("firmware_version")
+  hardwareVersion       String                @map("hardware_version")
+  status                ClassroomDeviceStatus @default(ACTIVE)
+  connectionStatus      ConnectionStatus      @default(UNKNOWN) @map("connection_status")
+  capabilities          String[]              @default([])
+  installedAt           DateTime              @map("installed_at")
+  registeredAt          DateTime              @default(now()) @map("registered_at")
+  lastSeenAt            DateTime?             @map("last_seen_at")
+  retiredAt             DateTime?             @map("retired_at")
+  notes                 String?
+  provisionedAt         DateTime?             @map("provisioned_at")
+  provisionedBy         String?               @map("provisioned_by")
+  pairingTokenHash      String?               @map("pairing_token_hash")
+  pairingTokenExpiresAt DateTime?             @map("pairing_token_expires_at")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+  school                School                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classroom             Classroom             @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([classroomId])
+  @@index([schoolId, status])
+  @@index([schoolId, connectionStatus])
+  @@map("classroom_devices")
 }
 
 model Teacher {
