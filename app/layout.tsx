@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Cairo } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { LevelProvider } from '@/components/level-provider'
+import { LanguageProvider } from '@/components/language-provider'
 import './globals.css'
 
 const cairo = Cairo({
@@ -25,7 +26,9 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={cairo.variable}>
       <body className="bg-background font-sans antialiased">
-        <LevelProvider>{children}</LevelProvider>
+        <LanguageProvider>
+          <LevelProvider>{children}</LevelProvider>
+        </LanguageProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

@@ -8,22 +8,25 @@ export async function GET() {
     if (auth.role === 'SCHOOL_ADMIN') {
       const school = await prisma.school.findUniqueOrThrow({
         where: { id: auth.schoolId! },
-        select: {
-          id: true,
-          schoolCode: true,
-          name: true,
-          logoUrl: true,
-          city: true,
-          country: true,
-          subscriptionPlan: true,
-          subscriptionStatus: true,
-          status: true,
+        include: {
+          settings: true,
         },
       })
+      const effectiveName = school.settings?.schoolNameOverride || school.name
 
       return Response.json({
         scope: 'school',
-        school,
+        school: {
+          id: school.id,
+          schoolCode: school.schoolCode,
+          name: effectiveName,
+          logoUrl: school.logoUrl,
+          city: school.city,
+          country: school.country,
+          subscriptionPlan: school.subscriptionPlan,
+          subscriptionStatus: school.subscriptionStatus,
+          status: school.status,
+        },
         district: `${school.city}, ${school.country}`,
       })
     }
@@ -32,25 +35,30 @@ export async function GET() {
       where: { status: 'ACTIVE' },
       orderBy: { createdAt: 'asc' },
       take: 1,
-      select: {
-        id: true,
-        schoolCode: true,
-        name: true,
-        logoUrl: true,
-        city: true,
-        country: true,
-        subscriptionPlan: true,
-        subscriptionStatus: true,
-        status: true,
+      include: {
+        settings: true,
       },
     })
 
-    const school = schools[0] ?? null
+    const firstSchool = schools[0] ?? null
+    const school = firstSchool
+      ? {
+          id: firstSchool.id,
+          schoolCode: firstSchool.schoolCode,
+          name: firstSchool.settings?.schoolNameOverride || firstSchool.name,
+          logoUrl: firstSchool.logoUrl,
+          city: firstSchool.city,
+          country: firstSchool.country,
+          subscriptionPlan: firstSchool.subscriptionPlan,
+          subscriptionStatus: firstSchool.subscriptionStatus,
+          status: firstSchool.status,
+        }
+      : null
 
     return Response.json({
       scope: 'all',
       school,
-      district: school ? `${school.city}, ${school.country}` : 'All schools',
+      district: firstSchool ? `${firstSchool.city}, ${firstSchool.country}` : 'All schools',
     })
   } catch (error) {
     return authResponseError(error)

@@ -45,6 +45,11 @@ enum SchoolLevelType {
   HIGH
 }
 
+enum Language {
+  AR
+  EN
+}
+
 model SuperAdmin {
   id                           String                      @id @default(cuid())
   email                        String                      @unique
@@ -90,6 +95,7 @@ model School {
   academicYears      AcademicYear[]
   levels             SchoolLevel[]
   classrooms         Classroom[]
+  settings           SchoolSettings?
 
   @@index([status])
   @@index([subscriptionStatus])
@@ -172,6 +178,26 @@ model Classroom {
   @@index([levelId])
   @@index([schoolId, isActive])
   @@map("classrooms")
+}
+
+model SchoolSettings {
+  id                      String   @id @default(cuid())
+  schoolId                String   @unique @map("school_id")
+  language                Language @default(AR)
+  noiseThresholdDb        Int      @default(70) @map("noise_threshold_db")
+  studentExitLimitMinutes Int      @default(10) @map("student_exit_limit_minutes")
+  noiseAlertsEnabled      Boolean  @default(true) @map("noise_alerts_enabled")
+  movementAlertsEnabled   Boolean  @default(true) @map("movement_alerts_enabled")
+  attendanceAlertsEnabled Boolean  @default(true) @map("attendance_alerts_enabled")
+  deviceAlertsEnabled     Boolean  @default(true) @map("device_alerts_enabled")
+  dailyReportEnabled      Boolean  @default(false) @map("daily_report_enabled")
+  schoolNameOverride      String?  @map("school_name_override")
+  contactPhone            String?  @map("contact_phone")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+  school                  School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([language])
+  @@map("school_settings")
 }
 
 model Subscription {

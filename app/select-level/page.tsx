@@ -2,8 +2,9 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { levels, type Level, district, school, getKpis } from '@/lib/mock-data'
+import { levels, type Level, getKpis } from '@/lib/mock-data'
 import { useLevel } from '@/components/level-provider'
+import { useLanguage } from '@/components/language-provider'
 import { Sparkles, GraduationCap, BookOpen, Microscope, ArrowLeft, Building2 } from 'lucide-react'
 
 const levelIcon: Record<Level, typeof BookOpen> = {
@@ -12,9 +13,16 @@ const levelIcon: Record<Level, typeof BookOpen> = {
   high: Microscope,
 }
 
+const levelLabelKey: Record<Level, string> = {
+  primary: 'level.primary',
+  middle: 'level.middle',
+  high: 'level.high',
+}
+
 export default function SelectLevelPage() {
   const router = useRouter()
-  const { setLevel } = useLevel()
+  const { setLevel, district, school } = useLevel()
+  const { t } = useLanguage()
   const [active, setActive] = useState<Level | null>(null)
 
   function choose(l: Level) {
@@ -40,8 +48,8 @@ export default function SelectLevelPage() {
             <Sparkles className="size-6" />
           </div>
           <div className="text-right">
-            <p className="text-lg font-extrabold leading-none">ClassPulse AI</p>
-            <p className="mt-1 text-xs text-white/60">منصة إدارة الفصول الذكية</p>
+            <p className="text-lg font-extrabold leading-none">{t('common.appName')}</p>
+            <p className="mt-1 text-xs text-white/60">{t('common.tagline')}</p>
           </div>
         </div>
 
@@ -49,9 +57,9 @@ export default function SelectLevelPage() {
           <Building2 className="size-3.5 text-accent" />
           {district} · {school}
         </div>
-        <h1 className="text-balance text-3xl font-extrabold">اختر المرحلة الدراسية</h1>
+        <h1 className="text-balance text-3xl font-extrabold">{t('level.title')}</h1>
         <p className="mt-2 max-w-md text-pretty leading-relaxed text-white/60">
-          سيتم عرض الفصول والبيانات والتقارير الخاصة بالمرحلة التي تختارها فقط.
+          {t('level.subtitle')}
         </p>
       </div>
 
@@ -79,18 +87,18 @@ export default function SelectLevelPage() {
                 </span>
               </div>
 
-              <h2 className="text-lg font-extrabold">{lvl.ar}</h2>
+              <h2 className="text-lg font-extrabold">{t(levelLabelKey[lvl.id])}</h2>
               <p className="mt-1 text-sm text-white/55" dir="ltr">
                 {lvl.en}
               </p>
 
               <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/10 pt-4">
-                <Stat label="الفصول" value={kpis.totalClasses} />
-                <Stat label="الطلاب" value={kpis.totalStudents} />
+                <Stat label={t('level.classes')} value={kpis.totalClasses} />
+                <Stat label={t('level.students')} value={kpis.totalStudents} />
               </div>
 
               <div className="mt-4 flex items-center justify-end gap-1.5 text-sm font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100">
-                الدخول للوحة المرحلة
+                {t('level.enter')}
                 <ArrowLeft className="size-4" />
               </div>
             </button>
@@ -99,7 +107,7 @@ export default function SelectLevelPage() {
       </div>
 
       <p className="relative mt-10 text-xs text-white/40">
-        يمكنك تبديل المرحلة في أي وقت من القائمة العلوية.
+        {t('level.note')}
       </p>
     </div>
   )

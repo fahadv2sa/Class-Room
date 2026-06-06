@@ -164,6 +164,35 @@ async function main() {
       },
     })
 
+    await prisma.schoolSettings.upsert({
+      where: { schoolId: school.id },
+      update: {
+        language: 'AR',
+        noiseThresholdDb: 70,
+        studentExitLimitMinutes: 10,
+        noiseAlertsEnabled: true,
+        movementAlertsEnabled: true,
+        attendanceAlertsEnabled: true,
+        deviceAlertsEnabled: true,
+        dailyReportEnabled: false,
+        schoolNameOverride: null,
+        contactPhone: '0112345678',
+      },
+      create: {
+        schoolId: school.id,
+        language: 'AR',
+        noiseThresholdDb: 70,
+        studentExitLimitMinutes: 10,
+        noiseAlertsEnabled: true,
+        movementAlertsEnabled: true,
+        attendanceAlertsEnabled: true,
+        deviceAlertsEnabled: true,
+        dailyReportEnabled: false,
+        schoolNameOverride: null,
+        contactPhone: '0112345678',
+      },
+    })
+
     const academicYearId = createHash('sha256').update(`${school.id}:2026-2027`).digest('hex').slice(0, 24)
 
     const academicYear = await prisma.academicYear.upsert({

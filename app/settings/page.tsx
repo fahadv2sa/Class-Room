@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { Segmented } from '@/components/ui/segmented'
 import { cn } from '@/lib/utils'
 import { useLevel } from '@/components/level-provider'
-import { levelMap } from '@/lib/mock-data'
+import { useLanguage } from '@/components/language-provider'
+import type { Level } from '@/lib/mock-data'
 import {
   School,
   SlidersHorizontal,
@@ -19,6 +20,38 @@ import {
   Volume2,
   Save,
 } from 'lucide-react'
+
+type SettingsState = {
+  language: 'AR' | 'EN'
+  noiseThresholdDb: number
+  studentExitLimitMinutes: number
+  noiseAlertsEnabled: boolean
+  movementAlertsEnabled: boolean
+  attendanceAlertsEnabled: boolean
+  deviceAlertsEnabled: boolean
+  dailyReportEnabled: boolean
+  schoolNameOverride: string
+  contactPhone: string
+}
+
+const defaultSettings: SettingsState = {
+  language: 'AR',
+  noiseThresholdDb: 70,
+  studentExitLimitMinutes: 10,
+  noiseAlertsEnabled: true,
+  movementAlertsEnabled: true,
+  attendanceAlertsEnabled: true,
+  deviceAlertsEnabled: true,
+  dailyReportEnabled: false,
+  schoolNameOverride: '',
+  contactPhone: '0112345678',
+}
+
+const levelLabelKey: Record<Level, string> = {
+  primary: 'level.primary',
+  middle: 'level.middle',
+  high: 'level.high',
+}
 
 function Toggle({
   checked,
@@ -108,40 +141,142 @@ function SectionCard({
 
 export default function SettingsPage() {
   const { level, school, district } = useLevel()
-  const [noiseThreshold, setNoiseThreshold] = useState(70)
-  const [exitLimit, setExitLimit] = useState(10)
-  const [notif, setNotif] = useState({
-    noise: true,
-    movement: true,
-    attendance: true,
-    devices: true,
-    daily: false,
-  })
-  const [lang, setLang] = useState('ar')
+  const { setLanguage, refreshLanguage, t } = useLanguage()
+  const [settings, setSettings] = useState<SettingsState>(defaultSettings)
+  const [schoolId, setSchoolId] = useState<string | null>(null)
+  const [managerEmail, setManagerEmail] = useState('admin@kf-school.edu.sa')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    async function loadSettings() {
+      setLoading(true)
+      setError('')
+
+      try {
+        const schoolRes = await fetch('/api/school/current', { cache: 'no-store' })
+        const schoolData = schoolRes.ok ? await schoolRes.json() : null
+        const currentSchoolId = schoolData?.school?.id ?? null
+        setSchoolId(currentSchoolId)
+
+        const settingsUrl = currentSchoolId
+          ? `/api/settings?schoolId=${encodeURIComponent(currentSchoolId)}`
+          : '/api/settings'
+        const settingsRes = await fetch(settingsUrl, { cache: 'no-store' })
+        if (!settingsRes.ok) throw new Error('Unable to load settings')
+
+        const data = await settingsRes.json()
+        const loaded = data.settings
+        setSettings({
+          language: loaded.language === 'EN' ? 'EN' : 'AR',
+          noiseThresholdDb: loaded.noiseThresholdDb,
+          studentExitLimitMinutes: loaded.studentExitLimitMinutes,
+          noiseAlertsEnabled: loaded.noiseAlertsEnabled,
+          movementAlertsEnabled: loaded.movementAlertsEnabled,
+          attendanceAlertsEnabled: loaded.attendanceAlertsEnabled,
+          deviceAlertsEnabled: loaded.deviceAlertsEnabled,
+          dailyReportEnabled: loaded.dailyReportEnabled,
+          schoolNameOverride: loaded.schoolNameOverride ?? '',
+          contactPhone: loaded.contactPhone ?? '',
+        })
+        setLanguage(loaded.language === 'EN' ? 'EN' : 'AR')
+
+        const meRes = await fetch('/api/auth/me', { cache: 'no-store' })
+        if (meRes.ok) {
+          const me = await meRes.json()
+          if (me.user?.email) setManagerEmail(me.user.email)
+        }
+      } catch {
+        setError('settings.loadError')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadSettings()
+  }, [setLanguage])
+
+  function update<K extends keyof SettingsState>(key: K, value: SettingsState[K]) {
+    setSettings((current) => ({ ...current, [key]: value }))
+    setMessage('')
+    setError('')
+  }
+
+  async function saveSettings() {
+    setSaving(true)
+    setMessage('')
+    setError('')
+
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schoolId,
+          language: settings.language,
+          noiseThresholdDb: settings.noiseThresholdDb,
+          studentExitLimitMinutes: settings.studentExitLimitMinutes,
+          noiseAlertsEnabled: settings.noiseAlertsEnabled,
+          movementAlertsEnabled: settings.movementAlertsEnabled,
+          attendanceAlertsEnabled: settings.attendanceAlertsEnabled,
+          deviceAlertsEnabled: settings.deviceAlertsEnabled,
+          dailyReportEnabled: settings.dailyReportEnabled,
+          schoolNameOverride: settings.schoolNameOverride,
+          contactPhone: settings.contactPhone,
+        }),
+      })
+
+      if (!res.ok) throw new Error('Unable to save settings')
+      const data = await res.json()
+      const savedLanguage = data.settings?.language === 'EN' ? 'EN' : 'AR'
+      setLanguage(savedLanguage)
+      await refreshLanguage()
+      setMessage('common.saved')
+    } catch {
+      setError('common.saveError')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const title = t('settings.title')
+  const subtitle = `${t('settings.subtitle')}${level ? ` · ${t(levelLabelKey[level])}` : ''}`
 
   return (
-    <DashboardShell
-      title="الإعدادات"
-      subtitle={`ضبط إعدادات المنصة${level ? ` · ${levelMap[level].ar}` : ''}`}
-    >
+    <DashboardShell title={title} subtitle={subtitle}>
       <div className="space-y-6">
+        {loading && (
+          <Card className="p-4 text-sm font-semibold text-muted-foreground">
+            {t('common.loading')}
+          </Card>
+        )}
+
         <div className="grid gap-6 lg:grid-cols-2">
           <SectionCard
             icon={School}
-            title="معلومات المدرسة"
-            desc="البيانات الأساسية للمنشأة التعليمية"
+            title={t('settings.schoolInfo')}
+            desc={t('settings.schoolInfoDesc')}
           >
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="اسم المدرسة">
-                <Input defaultValue={school} />
+              <Field label={t('settings.schoolName')}>
+                <Input
+                  value={settings.schoolNameOverride || school}
+                  onChange={(e) => update('schoolNameOverride', e.target.value)}
+                />
               </Field>
-              <Field label="إدارة التعليم">
-                <Input defaultValue={district} />
+              <Field label={t('settings.educationOffice')}>
+                <Input value={district} readOnly />
               </Field>
-              <Field label="رقم التواصل">
-                <Input defaultValue="0112345678" dir="ltr" />
+              <Field label={t('settings.contactPhone')}>
+                <Input
+                  value={settings.contactPhone}
+                  onChange={(e) => update('contactPhone', e.target.value)}
+                  dir="ltr"
+                />
               </Field>
-              <Field label="العام الدراسي">
+              <Field label={t('settings.academicYear')}>
                 <Input defaultValue="1447 هـ" />
               </Field>
             </div>
@@ -149,24 +284,24 @@ export default function SettingsPage() {
 
           <SectionCard
             icon={SlidersHorizontal}
-            title="حدود التنبيهات الذكية"
-            desc="ضبط العتبات التي تطلق التنبيهات تلقائياً"
+            title={t('settings.thresholds')}
+            desc={t('settings.thresholdsDesc')}
           >
             <div className="space-y-6">
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="flex items-center gap-2 text-sm font-semibold">
                     <Volume2 className="size-4 text-muted-foreground" />
-                    الحد الأقصى للضوضاء
+                    {t('settings.noiseThreshold')}
                   </span>
-                  <Badge variant="accent">{noiseThreshold} dB</Badge>
+                  <Badge variant="accent">{settings.noiseThresholdDb} dB</Badge>
                 </div>
                 <input
                   type="range"
                   min={40}
                   max={100}
-                  value={noiseThreshold}
-                  onChange={(e) => setNoiseThreshold(Number(e.target.value))}
+                  value={settings.noiseThresholdDb}
+                  onChange={(e) => update('noiseThresholdDb', Number(e.target.value))}
                   className="w-full accent-[var(--accent)]"
                 />
               </div>
@@ -174,16 +309,18 @@ export default function SettingsPage() {
                 <div className="mb-2 flex items-center justify-between">
                   <span className="flex items-center gap-2 text-sm font-semibold">
                     <Users className="size-4 text-muted-foreground" />
-                    أقصى مدة خروج للطالب
+                    {t('settings.exitLimit')}
                   </span>
-                  <Badge variant="accent">{exitLimit} دقيقة</Badge>
+                  <Badge variant="accent">
+                    {settings.studentExitLimitMinutes} {t('settings.minutes')}
+                  </Badge>
                 </div>
                 <input
                   type="range"
                   min={5}
                   max={30}
-                  value={exitLimit}
-                  onChange={(e) => setExitLimit(Number(e.target.value))}
+                  value={settings.studentExitLimitMinutes}
+                  onChange={(e) => update('studentExitLimitMinutes', Number(e.target.value))}
                   className="w-full accent-[var(--accent)]"
                 />
               </div>
@@ -192,78 +329,97 @@ export default function SettingsPage() {
 
           <SectionCard
             icon={BellRing}
-            title="إعدادات الإشعارات"
-            desc="تحكم بأنواع التنبيهات التي تصلك"
+            title={t('settings.notifications')}
+            desc={t('settings.notificationsDesc')}
           >
             <div>
               <ToggleRow
-                title="تنبيهات الضوضاء"
-                desc="إشعار عند تجاوز الحد المسموح"
-                value={notif.noise}
-                onChange={(v) => setNotif((p) => ({ ...p, noise: v }))}
+                title={t('settings.noiseAlerts')}
+                desc={t('settings.noiseAlertsDesc')}
+                value={settings.noiseAlertsEnabled}
+                onChange={(v) => update('noiseAlertsEnabled', v)}
               />
               <ToggleRow
-                title="تنبيهات حركة الطلاب"
-                desc="إشعار عند الخروج الطويل أو المتكرر"
-                value={notif.movement}
-                onChange={(v) => setNotif((p) => ({ ...p, movement: v }))}
+                title={t('settings.movementAlerts')}
+                desc={t('settings.movementAlertsDesc')}
+                value={settings.movementAlertsEnabled}
+                onChange={(v) => update('movementAlertsEnabled', v)}
               />
               <ToggleRow
-                title="تنبيهات الحضور"
-                desc="إشعار عند الغياب أو التأخر"
-                value={notif.attendance}
-                onChange={(v) => setNotif((p) => ({ ...p, attendance: v }))}
+                title={t('settings.attendanceAlerts')}
+                desc={t('settings.attendanceAlertsDesc')}
+                value={settings.attendanceAlertsEnabled}
+                onChange={(v) => update('attendanceAlertsEnabled', v)}
               />
               <ToggleRow
-                title="تنبيهات الأجهزة"
-                desc="إشعار عند انقطاع الاتصال أو الأعطال"
-                value={notif.devices}
-                onChange={(v) => setNotif((p) => ({ ...p, devices: v }))}
+                title={t('settings.deviceAlerts')}
+                desc={t('settings.deviceAlertsDesc')}
+                value={settings.deviceAlertsEnabled}
+                onChange={(v) => update('deviceAlertsEnabled', v)}
               />
               <ToggleRow
-                title="التقرير اليومي"
-                desc="ملخص يومي عبر البريد الإلكتروني"
-                value={notif.daily}
-                onChange={(v) => setNotif((p) => ({ ...p, daily: v }))}
+                title={t('settings.dailyReport')}
+                desc={t('settings.dailyReportDesc')}
+                value={settings.dailyReportEnabled}
+                onChange={(v) => update('dailyReportEnabled', v)}
               />
             </div>
           </SectionCard>
 
           <SectionCard
             icon={ShieldCheck}
-            title="الصلاحيات والتفضيلات"
-            desc="إعدادات الحساب واللغة والصلاحيات"
+            title={t('settings.permissions')}
+            desc={t('settings.permissionsDesc')}
           >
             <div className="space-y-5">
-              <Field label="لغة الواجهة">
+              <Field label={t('settings.interfaceLanguage')}>
                 <Segmented
                   options={[
-                    { value: 'ar', label: 'العربية' },
-                    { value: 'en', label: 'English' },
+                    { value: 'AR', label: 'العربية' },
+                    { value: 'EN', label: 'English' },
                   ]}
-                  value={lang}
-                  onChange={setLang}
+                  value={settings.language}
+                  onChange={(value) => {
+                    update('language', value)
+                    setLanguage(value)
+                  }}
                 />
               </Field>
-              <Field label="البريد الإلكتروني للمدير">
-                <Input defaultValue="admin@kf-school.edu.sa" dir="ltr" />
+              <Field label={t('settings.managerEmail')}>
+                <Input value={managerEmail} readOnly dir="ltr" />
               </Field>
               <div className="rounded-xl bg-muted/50 p-4">
-                <p className="text-sm font-semibold">مستوى الصلاحية</p>
+                <p className="text-sm font-semibold">{t('settings.permissionLevel')}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  لديك صلاحية مدير المدرسة — وصول كامل لجميع الفصول والتقارير.
+                  {t('settings.permissionCopy')}
                 </p>
                 <Badge variant="success" className="mt-2">
-                  مدير المدرسة
+                  {t('settings.roleSchoolAdmin')}
                 </Badge>
               </div>
             </div>
           </SectionCard>
         </div>
 
+        {(message || error) && (
+          <Card
+            className={cn(
+              'p-4 text-sm font-semibold',
+              error ? 'text-destructive' : 'text-success',
+            )}
+          >
+            {error ? t(error) : t(message)}
+          </Card>
+        )}
+
         <div className="flex justify-end">
-          <Button className="bg-accent text-accent-foreground hover:bg-accent/90">
-            <Save className="size-4" /> حفظ التغييرات
+          <Button
+            onClick={saveSettings}
+            disabled={saving || loading}
+            className="bg-accent text-accent-foreground hover:bg-accent/90"
+          >
+            <Save className="size-4" />
+            {saving ? t('common.saving') : t('common.save')}
           </Button>
         </div>
       </div>
