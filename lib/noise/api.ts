@@ -3,6 +3,8 @@ import type { AuthContext } from '@/lib/auth/session'
 import { assertSameSchool } from '@/lib/academic/access'
 import { prisma } from '@/lib/prisma'
 
+const FOUNDATION_SCORE_VERSION = 1
+
 export const noiseEventInclude = {
   classroom: { select: { id: true, classroomCode: true, classroomName: true } },
   classroomDevice: { select: { id: true, deviceCode: true } },
@@ -106,6 +108,7 @@ function aggregateNoiseEvents(events: { durationSeconds: number | null; averageD
     mediumEvents,
     highEvents,
     quietScore: quietScore({ totalNoiseSeconds, highEvents, peakDb }),
+    scoreVersion: FOUNDATION_SCORE_VERSION,
   }
 }
 
@@ -124,16 +127,20 @@ async function recalculateClassroomSummary(schoolId: string, classroomId: string
 
   return prisma.classroomNoiseSummary.upsert({
     where: {
-      schoolId_classroomId_summaryDate: {
+      schoolId_classroomId_period_periodStart: {
         schoolId,
         classroomId,
-        summaryDate: start,
+        period: 'DAILY',
+        periodStart: start,
       },
     },
     update: metrics,
     create: {
       schoolId,
       classroomId,
+      period: 'DAILY',
+      periodStart: start,
+      periodEnd: end,
       summaryDate: start,
       ...metrics,
     },
@@ -155,16 +162,20 @@ async function recalculateTeacherSummary(schoolId: string, teacherId: string, su
 
   return prisma.teacherNoiseSummary.upsert({
     where: {
-      schoolId_teacherId_summaryDate: {
+      schoolId_teacherId_period_periodStart: {
         schoolId,
         teacherId,
-        summaryDate: start,
+        period: 'DAILY',
+        periodStart: start,
       },
     },
     update: metrics,
     create: {
       schoolId,
       teacherId,
+      period: 'DAILY',
+      periodStart: start,
+      periodEnd: end,
       summaryDate: start,
       ...metrics,
     },

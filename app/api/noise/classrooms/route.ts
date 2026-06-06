@@ -50,7 +50,7 @@ export async function GET(request: Request) {
           },
         },
         noiseSummaries: {
-          where: { summaryDate },
+          where: { period: 'DAILY', summaryDate },
           take: 1,
         },
       },

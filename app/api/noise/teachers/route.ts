@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     const where: Prisma.TeacherNoiseSummaryWhereInput = {
       ...(whereSchoolId ? { schoolId: whereSchoolId } : {}),
       ...(teacherId ? { teacherId } : {}),
+      period: 'DAILY',
       summaryDate,
     }
 

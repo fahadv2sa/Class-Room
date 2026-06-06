@@ -163,6 +163,14 @@ enum NoiseState {
   LOUD
 }
 
+enum SummaryPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+  TERM
+  YEARLY
+}
+
 model SuperAdmin {
   id                           String                      @id @default(cuid())
   email                        String                      @unique
@@ -703,6 +711,9 @@ model ClassroomNoiseSummary {
   id                 String   @id @default(cuid())
   schoolId           String   @map("school_id")
   classroomId        String   @map("classroom_id")
+  period             SummaryPeriod @default(DAILY)
+  periodStart        DateTime @map("period_start") @db.Date
+  periodEnd          DateTime @map("period_end") @db.Date
   summaryDate        DateTime @map("summary_date") @db.Date
   totalEvents        Int      @default(0) @map("total_events")
   totalNoiseSeconds  Int      @default(0) @map("total_noise_seconds")
@@ -712,14 +723,18 @@ model ClassroomNoiseSummary {
   mediumEvents       Int      @default(0) @map("medium_events")
   highEvents         Int      @default(0) @map("high_events")
   quietScore         Int      @default(100) @map("quiet_score")
+  scoreVersion       Int      @default(1) @map("score_version")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   school             School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   classroom          Classroom @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
 
-  @@unique([schoolId, classroomId, summaryDate])
+  @@unique([schoolId, classroomId, period, periodStart])
   @@index([schoolId])
   @@index([classroomId])
+  @@index([period])
+  @@index([periodStart])
+  @@index([periodEnd])
   @@index([summaryDate])
   @@map("classroom_noise_summaries")
 }
@@ -728,6 +743,9 @@ model TeacherNoiseSummary {
   id                 String   @id @default(cuid())
   schoolId           String   @map("school_id")
   teacherId          String   @map("teacher_id")
+  period             SummaryPeriod @default(DAILY)
+  periodStart        DateTime @map("period_start") @db.Date
+  periodEnd          DateTime @map("period_end") @db.Date
   summaryDate        DateTime @map("summary_date") @db.Date
   totalEvents        Int      @default(0) @map("total_events")
   totalNoiseSeconds  Int      @default(0) @map("total_noise_seconds")
@@ -737,14 +755,18 @@ model TeacherNoiseSummary {
   mediumEvents       Int      @default(0) @map("medium_events")
   highEvents         Int      @default(0) @map("high_events")
   quietScore         Int      @default(100) @map("quiet_score")
+  scoreVersion       Int      @default(1) @map("score_version")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   school             School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   teacher            Teacher  @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
 
-  @@unique([schoolId, teacherId, summaryDate])
+  @@unique([schoolId, teacherId, period, periodStart])
   @@index([schoolId])
   @@index([teacherId])
+  @@index([period])
+  @@index([periodStart])
+  @@index([periodEnd])
   @@index([summaryDate])
   @@map("teacher_noise_summaries")
 }

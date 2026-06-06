@@ -68,6 +68,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2F Classroom Presence & Movement Foundation
 - Phase 2F.1 Direction & Session Integrity Correction
 - Phase 2G Live Noise Monitoring, Classroom Averages & Teacher-Linked Noise Scoring Foundation
+- Phase 2G.1 Scoring & Summary Architecture Correction
 
 ### In Progress
 
@@ -523,16 +524,18 @@ Major architectural decisions:
 - Persistent storage is event-based, summary-based, and current-state based.
 - `NoiseEvent.teacher_id` is linked from `TeacherPresenceState` when a teacher is currently `INSIDE_CLASSROOM`.
 - `NoiseEvent.attendance_session_id` links to the current open classroom attendance session when available.
-- The quiet score is a foundation metric only, not a final report or teacher ranking.
+- The quiet score is a foundation metric only, not a final scoring model, final report, or teacher ranking.
 - No AI, predictive analytics, final reporting engine, automated decisions, or disciplinary scoring were added.
 
 Quiet score formula:
 
+- Current status: foundation formula version `1`.
 - Start from `100`.
 - Subtract `total_noise_seconds / 60`.
 - Subtract `5` points per high-severity event.
 - Subtract `0.5` points for each dB above `70` at daily peak.
 - Clamp result from `0` to `100`.
+- This formula is temporary and may evolve. Historical summary rows keep `score_version` so older stored scores remain interpretable if future scoring rules change.
 
 APIs added:
 
@@ -563,6 +566,62 @@ Not implemented:
 - Reports engine.
 - PDF exports.
 - Automated disciplinary decisions.
+
+### Phase 2G.1: Scoring & Summary Architecture Correction
+
+Objective:
+
+Correct the Phase 2G scoring and summary architecture without adding reporting, analytics, AI, rankings, recommendations, alerts, exports, or UI changes.
+
+Implemented:
+
+- Added `SummaryPeriod` enum.
+- Supported summary periods at the schema level: `DAILY`, `WEEKLY`, `MONTHLY`, `TERM`, `YEARLY`.
+- Added `period`, `period_start`, and `period_end` to classroom and teacher noise summaries.
+- Added `score_version` to classroom and teacher noise summaries.
+- Current generation remains `DAILY` only.
+- Existing noise APIs and Noise page continue reading daily summaries.
+
+Major architectural decisions:
+
+- `quiet_score` is a replaceable foundation score, not a final scoring model.
+- Current score rows use score version `1`.
+- Historical score rows must not be recalculated merely because future scoring formulas change.
+- Future weekly, monthly, term, and yearly summaries should use the same summary tables with different `period`, `period_start`, and `period_end` values.
+- No separate weekly, monthly, term, or yearly summary tables should be created.
+- The current Phase 2G APIs remain daily-focused until a future reporting or aggregation phase explicitly expands behavior.
+
+APIs added:
+
+- No new API was added in Phase 2G.1.
+
+Database entities added:
+
+- No database entity was added in Phase 2G.1.
+
+Database changes:
+
+- `SummaryPeriod`
+- `ClassroomNoiseSummary.period`
+- `ClassroomNoiseSummary.period_start`
+- `ClassroomNoiseSummary.period_end`
+- `ClassroomNoiseSummary.score_version`
+- `TeacherNoiseSummary.period`
+- `TeacherNoiseSummary.period_start`
+- `TeacherNoiseSummary.period_end`
+- `TeacherNoiseSummary.score_version`
+
+Not implemented:
+
+- Weekly summary generation.
+- Monthly summary generation.
+- Term summary generation.
+- Yearly summary generation.
+- Reporting engine.
+- AI.
+- Ranking engine.
+- Alerts engine.
+- Exports.
 
 ---
 
@@ -656,6 +715,7 @@ Migrations:
 - `20260606170000_rfid_attendance_engine_foundation`
 - `20260606180000_classroom_presence_movement_foundation`
 - `20260607100000_live_noise_monitoring_foundation`
+- `20260607110000_scoring_summary_architecture_correction`
 
 ### Authentication
 
@@ -1718,6 +1778,7 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2F Classroom Presence & Movement Foundation
 - Phase 2F.1 Direction & Session Integrity Correction
 - Phase 2G Live Noise Monitoring, Classroom Averages & Teacher-Linked Noise Scoring Foundation
+- Phase 2G.1 Scoring & Summary Architecture Correction
 
 ### Next
 
