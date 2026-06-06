@@ -31,7 +31,7 @@ export function normalizeCardCode(value: unknown) {
 }
 
 export function normalizeScanDirection(value: unknown): RFIDScanDirection {
-  const direction = String(value ?? 'ENTRY').trim().toUpperCase()
+  const direction = String(value ?? 'UNKNOWN').trim().toUpperCase()
   if (direction === 'ENTRY' || direction === 'EXIT' || direction === 'UNKNOWN') return direction
   throw new Response('scanDirection must be ENTRY, EXIT, or UNKNOWN', { status: 400 })
 }
@@ -45,6 +45,21 @@ export function dateFromInput(value: unknown) {
 
 export function sessionDate(value: Date) {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()))
+}
+
+async function closeStaleOpenSessions(schoolId: string, classroomId: string, currentSessionDate: Date, closedAt: Date) {
+  await prisma.classroomAttendanceSession.updateMany({
+    where: {
+      schoolId,
+      classroomId,
+      status: 'OPEN',
+      sessionDate: { not: currentSessionDate },
+    },
+    data: {
+      status: 'CLOSED',
+      closedAt,
+    },
+  })
 }
 
 export async function ensureAttendanceRecords(sessionId: string, schoolId: string, classroomId: string) {
@@ -84,8 +99,11 @@ export async function findOrCreateOpenSession({
   teacherId?: string | null
   at: Date
 }) {
+  const currentSessionDate = sessionDate(at)
+  await closeStaleOpenSessions(schoolId, classroomId, currentSessionDate, at)
+
   const existing = await prisma.classroomAttendanceSession.findFirst({
-    where: { schoolId, classroomId, status: 'OPEN' },
+    where: { schoolId, classroomId, status: 'OPEN', sessionDate: currentSessionDate },
   })
 
   if (existing) {
@@ -106,7 +124,7 @@ export async function findOrCreateOpenSession({
       classroomId,
       classroomDeviceId,
       teacherId: teacherId ?? null,
-      sessionDate: sessionDate(at),
+      sessionDate: currentSessionDate,
       status: 'OPEN',
       openedAt: at,
     },
@@ -114,6 +132,20 @@ export async function findOrCreateOpenSession({
 
   await ensureAttendanceRecords(created.id, schoolId, classroomId)
   return created
+}
+
+async function findOpenSessionForDate(schoolId: string, classroomId: string, at: Date) {
+  const currentSessionDate = sessionDate(at)
+  await closeStaleOpenSessions(schoolId, classroomId, currentSessionDate, at)
+
+  return prisma.classroomAttendanceSession.findFirst({
+    where: {
+      schoolId,
+      classroomId,
+      status: 'OPEN',
+      sessionDate: currentSessionDate,
+    },
+  })
 }
 
 async function attendanceStatusForEntry(schoolId: string, openedAt: Date, scannedAt: Date): Promise<StudentAttendanceStatus> {
@@ -228,6 +260,34 @@ async function updateStudentPresenceFromScan({
       },
     })
   }
+}
+
+async function deriveStudentScanDirection(attendanceSessionId: string, studentId: string): Promise<RFIDScanDirection> {
+  const presenceState = await prisma.studentPresenceState.findUnique({
+    where: {
+      attendanceSessionId_studentId: {
+        attendanceSessionId,
+        studentId,
+      },
+    },
+    select: { currentState: true },
+  })
+
+  return presenceState?.currentState === 'INSIDE_CLASSROOM' ? 'EXIT' : 'ENTRY'
+}
+
+async function deriveTeacherScanDirection(classroomId: string, teacherId: string): Promise<RFIDScanDirection> {
+  const presenceState = await prisma.teacherPresenceState.findUnique({
+    where: {
+      classroomId_teacherId: {
+        classroomId,
+        teacherId,
+      },
+    },
+    select: { currentState: true },
+  })
+
+  return presenceState?.currentState === 'INSIDE_CLASSROOM' ? 'EXIT' : 'ENTRY'
 }
 
 async function updateTeacherPresenceFromScan({
@@ -388,7 +448,7 @@ async function createScanEvent({
 
 export async function processRFIDScan(input: ProcessRFIDScanInput) {
   const cardCode = normalizeCardCode(input.cardCode)
-  const scanDirection = normalizeScanDirection(input.scanDirection)
+  normalizeScanDirection(input.scanDirection)
   const scannedAt = dateFromInput(input.scannedAt)
   const sourceEventId = String(input.sourceEventId ?? '').trim() || null
 
@@ -415,7 +475,7 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
         classroomId: device.classroomId,
         cardCode,
         actorType: 'UNKNOWN',
-        scanDirection,
+        scanDirection: sourceDuplicate.scanDirection,
         scanStatus: 'DUPLICATE_IGNORED',
         scannedAt,
         sourceEventId,
@@ -429,7 +489,6 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
       where: {
         classroomDeviceId: device.id,
         cardCode,
-        scanDirection,
         scanStatus: { not: 'DUPLICATE_IGNORED' },
         scannedAt: {
           gte: new Date(scannedAt.getTime() - DUPLICATE_WINDOW_MS),
@@ -446,7 +505,7 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
         classroomId: device.classroomId,
         cardCode,
         actorType: 'UNKNOWN',
-        scanDirection,
+        scanDirection: windowDuplicate.scanDirection,
         scanStatus: 'DUPLICATE_IGNORED',
         scannedAt,
         duplicateOfEventId: windowDuplicate.id,
@@ -481,33 +540,44 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
     teacherId = credential.teacherId
   }
 
-  const event = await createScanEvent({
-    schoolId: device.schoolId,
-    classroomDeviceId: device.id,
-    classroomId: device.classroomId,
-    cardCredentialId: credential?.id,
-    cardCode,
-    actorType,
-    studentId,
-    teacherId,
-    scanDirection,
-    scanStatus,
-    scannedAt,
-    sourceEventId,
-    notes: input.notes,
-  })
-
   if (scanStatus !== 'ACCEPTED') {
+    const event = await createScanEvent({
+      schoolId: device.schoolId,
+      classroomDeviceId: device.id,
+      classroomId: device.classroomId,
+      cardCredentialId: credential?.id,
+      cardCode,
+      actorType,
+      studentId,
+      teacherId,
+      scanDirection: 'UNKNOWN',
+      scanStatus,
+      scannedAt,
+      sourceEventId,
+      notes: input.notes,
+    })
+
     return { event, scanStatus, duplicate: false, attendanceSession: null, attendanceRecord: null }
   }
 
   if (actorType === 'TEACHER' && teacherId) {
-    const attendanceSession = await prisma.classroomAttendanceSession.findFirst({
-      where: {
-        schoolId: device.schoolId,
-        classroomId: device.classroomId,
-        status: 'OPEN',
-      },
+    const attendanceSession = await findOpenSessionForDate(device.schoolId, device.classroomId, scannedAt)
+    const scanDirection = await deriveTeacherScanDirection(device.classroomId, teacherId)
+
+    const event = await createScanEvent({
+      schoolId: device.schoolId,
+      classroomDeviceId: device.id,
+      classroomId: device.classroomId,
+      cardCredentialId: credential?.id,
+      cardCode,
+      actorType,
+      studentId,
+      teacherId,
+      scanDirection,
+      scanStatus,
+      scannedAt,
+      sourceEventId,
+      notes: input.notes,
     })
 
     await updateTeacherPresenceFromScan({
@@ -537,6 +607,24 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
       classroomDeviceId: device.id,
       at: scannedAt,
     })
+    const scanDirection = await deriveStudentScanDirection(attendanceSession.id, studentId)
+
+    const event = await createScanEvent({
+      schoolId: device.schoolId,
+      classroomDeviceId: device.id,
+      classroomId: device.classroomId,
+      cardCredentialId: credential?.id,
+      cardCode,
+      actorType,
+      studentId,
+      teacherId,
+      scanDirection,
+      scanStatus,
+      scannedAt,
+      sourceEventId,
+      notes: input.notes,
+    })
+
     const entryStatus = await attendanceStatusForEntry(device.schoolId, attendanceSession.openedAt, scannedAt)
 
     const attendanceRecord = await prisma.studentAttendanceRecord.upsert({
@@ -577,5 +665,20 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
     return { event, scanStatus, duplicate: false, attendanceSession, attendanceRecord }
   }
 
+  const event = await createScanEvent({
+    schoolId: device.schoolId,
+    classroomDeviceId: device.id,
+    classroomId: device.classroomId,
+    cardCredentialId: credential?.id,
+    cardCode,
+    actorType,
+    studentId,
+    teacherId,
+    scanDirection: 'UNKNOWN',
+    scanStatus,
+    scannedAt,
+    sourceEventId,
+    notes: input.notes,
+  })
   return { event, scanStatus, duplicate: false, attendanceSession: null, attendanceRecord: null }
 }
