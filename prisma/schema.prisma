@@ -171,6 +171,52 @@ enum SummaryPeriod {
   YEARLY
 }
 
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum AlertType {
+  STUDENT_LATE
+  STUDENT_ABSENT
+  EXCESSIVE_STUDENT_EXITS
+  HIGH_NOISE_EVENT
+  DEVICE_OFFLINE
+}
+
+enum AlertSourceType {
+  ATTENDANCE
+  MOVEMENT
+  NOISE
+  DEVICE
+}
+
+enum InsightSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum InsightStatus {
+  ACTIVE
+  DISMISSED
+  RESOLVED
+}
+
+enum InsightType {
+  RECURRING_STUDENT_LATENESS
+  EXCESSIVE_STUDENT_MOVEMENT
+  CHRONIC_CLASSROOM_NOISE
+  DEVICE_RELIABILITY_ISSUE
+}
+
 model SuperAdmin {
   id                           String                      @id @default(cuid())
   email                        String                      @unique
@@ -232,6 +278,8 @@ model School {
   classroomNoiseSummaries ClassroomNoiseSummary[]
   teacherNoiseSummaries TeacherNoiseSummary[]
   classroomNoiseStates ClassroomNoiseState[]
+  alerts            Alert[]
+  insights          Insight[]
 
   @@index([status])
   @@index([subscriptionStatus])
@@ -321,6 +369,8 @@ model Classroom {
   noiseEvents      NoiseEvent[]
   noiseSummaries   ClassroomNoiseSummary[]
   noiseStates      ClassroomNoiseState[]
+  alerts           Alert[]
+  insights         Insight[]
 
   @@unique([schoolId, academicYearId, classroomCode])
   @@unique([id, schoolId])
@@ -359,6 +409,7 @@ model ClassroomDevice {
   attendanceSessions    ClassroomAttendanceSession[]
   noiseEvents           NoiseEvent[]
   noiseStates           ClassroomNoiseState[]
+  alerts                Alert[]
 
   @@unique([id, schoolId])
   @@index([schoolId])
@@ -392,6 +443,8 @@ model Teacher {
   teacherMovementRecords TeacherMovementRecord[]
   noiseEvents      NoiseEvent[]
   noiseSummaries   TeacherNoiseSummary[]
+  alerts           Alert[]
+  insights         Insight[]
 
   @@unique([schoolId, employeeNumber])
   @@unique([id, schoolId])
@@ -429,6 +482,8 @@ model Student {
   attendanceRecords StudentAttendanceRecord[]
   presenceStates StudentPresenceState[]
   movementRecords StudentMovementRecord[]
+  alerts          Alert[]
+  insights        Insight[]
 
   @@unique([schoolId, studentNumber])
   @@unique([id, schoolId])
@@ -795,6 +850,78 @@ model ClassroomNoiseState {
   @@map("classroom_noise_states")
 }
 
+model Alert {
+  id             String          @id @default(cuid())
+  schoolId       String          @map("school_id")
+  classroomId    String?         @map("classroom_id")
+  teacherId      String?         @map("teacher_id")
+  studentId      String?         @map("student_id")
+  deviceId       String?         @map("device_id")
+  alertType      AlertType       @map("alert_type")
+  severity       AlertSeverity
+  status         AlertStatus     @default(OPEN)
+  title          String
+  description    String
+  sourceType     AlertSourceType @map("source_type")
+  sourceKey      String?         @unique @map("source_key")
+  acknowledgedBy String?         @map("acknowledged_by")
+  acknowledgedAt DateTime?       @map("acknowledged_at")
+  resolvedBy     String?         @map("resolved_by")
+  resolvedAt     DateTime?       @map("resolved_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classroom      Classroom?      @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  teacher        Teacher?        @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  student        Student?        @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  device         ClassroomDevice? @relation(fields: [deviceId, schoolId], references: [id, schoolId], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([classroomId])
+  @@index([teacherId])
+  @@index([studentId])
+  @@index([deviceId])
+  @@index([alertType])
+  @@index([severity])
+  @@index([status])
+  @@index([sourceType])
+  @@index([createdAt])
+  @@map("alerts")
+}
+
+model Insight {
+  id              String          @id @default(cuid())
+  schoolId        String          @map("school_id")
+  classroomId     String?         @map("classroom_id")
+  teacherId       String?         @map("teacher_id")
+  studentId       String?         @map("student_id")
+  insightType     InsightType     @map("insight_type")
+  severity        InsightSeverity
+  status          InsightStatus   @default(ACTIVE)
+  title           String
+  description     String
+  score           Int?
+  sourceKey       String?         @unique @map("source_key")
+  firstDetectedAt DateTime        @default(now()) @map("first_detected_at")
+  lastDetectedAt  DateTime        @default(now()) @map("last_detected_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  school          School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classroom       Classroom?      @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  teacher         Teacher?        @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  student         Student?        @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([classroomId])
+  @@index([teacherId])
+  @@index([studentId])
+  @@index([insightType])
+  @@index([severity])
+  @@index([status])
+  @@index([lastDetectedAt])
+  @@map("insights")
+}
+
 model SchoolSettings {
   id                      String   @id @default(cuid())
   schoolId                String   @unique @map("school_id")
@@ -803,6 +930,10 @@ model SchoolSettings {
   noiseDurationSeconds    Int      @default(10) @map("noise_duration_seconds")
   studentExitLimitMinutes Int      @default(10) @map("student_exit_limit_minutes")
   lateThresholdMinutes    Int      @default(10) @map("late_threshold_minutes")
+  lateStudentThreshold    Int      @default(5) @map("late_student_threshold")
+  movementThreshold       Int      @default(3) @map("movement_threshold")
+  noiseEventThreshold     Int      @default(3) @map("noise_event_threshold")
+  deviceOfflineThreshold  Int      @default(3) @map("device_offline_threshold")
   noiseAlertsEnabled      Boolean  @default(true) @map("noise_alerts_enabled")
   movementAlertsEnabled   Boolean  @default(true) @map("movement_alerts_enabled")
   attendanceAlertsEnabled Boolean  @default(true) @map("attendance_alerts_enabled")

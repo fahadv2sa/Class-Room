@@ -4,13 +4,9 @@ Single source of truth for the Class-Room repository.
 
 Audience: future AI tools, developers, auditors, project managers, investors, and stakeholders.
 
-Last verified from repository state containing these latest commits:
+Last verified from repository state through:
 
-- `b7d435d` Phase 2B.6R native internationalization refactor
-- `b1f444c` Phase 2B.6 full internationalization
-- `ed0241f` Phase 2C teachers and students foundation
-- `f025b46` Phase 2B.5 settings persistence and language foundation
-- `7c4bd8a` Phase 2A + Phase 2A.1 + Phase 2B
+- Phase 2H Operational Intelligence Foundation
 
 This document describes verified repository facts only. It does not describe planned features as completed.
 
@@ -69,6 +65,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2F.1 Direction & Session Integrity Correction
 - Phase 2G Live Noise Monitoring, Classroom Averages & Teacher-Linked Noise Scoring Foundation
 - Phase 2G.1 Scoring & Summary Architecture Correction
+- Phase 2H Operational Intelligence Foundation
 
 ### In Progress
 
@@ -76,7 +73,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 
 ### Planned
 
-- Phase 2H Reporting
+- Reporting Engine
 - Phase 3.0 AI Layer
 
 ### Phase 2A: SaaS Foundation
@@ -611,6 +608,79 @@ Database changes:
 - `TeacherNoiseSummary.period_end`
 - `TeacherNoiseSummary.score_version`
 
+### Phase 2H: Operational Intelligence Foundation
+
+Objective:
+
+Convert existing deterministic operational data into school-scoped alerts and insights without adding AI, ML, reporting, notification delivery, or new operational engines.
+
+Implemented:
+
+- Alert model for immediate operational events.
+- Insight model for accumulated operational behavior patterns.
+- Shared deterministic rule layer for alerts and insights.
+- School-specific thresholds in `SchoolSettings`.
+- Tenant-scoped alerts and insights APIs with pagination and filters.
+- Database-backed Alerts page connection.
+
+Major architectural decisions:
+
+- `Alert` and `Insight` are derived operational records. They do not replace source records.
+- Existing source-of-truth systems remain unchanged:
+  - Attendance records.
+  - Presence states.
+  - Movement records.
+  - Noise events.
+  - Classroom device state.
+- Rules are deterministic and threshold-based only.
+- No AI, ML, prediction, ranking engine, reporting engine, PDF export, email, SMS, WhatsApp, or notification delivery is implemented in this phase.
+- Alerts represent immediate events.
+- Insights represent repeated patterns over the configured lookback window.
+- Alerts and insights share the same rule foundation in `lib/intelligence/rules.ts`.
+
+Supported alert types:
+
+- `STUDENT_LATE`
+- `STUDENT_ABSENT`
+- `EXCESSIVE_STUDENT_EXITS`
+- `HIGH_NOISE_EVENT`
+- `DEVICE_OFFLINE`
+
+Supported insight types:
+
+- `RECURRING_STUDENT_LATENESS`
+- `EXCESSIVE_STUDENT_MOVEMENT`
+- `CHRONIC_CLASSROOM_NOISE`
+- `DEVICE_RELIABILITY_ISSUE`
+
+APIs added:
+
+- `GET /api/alerts`
+- `GET /api/alerts/[alertId]`
+- `PATCH /api/alerts/[alertId]`
+- `GET /api/insights`
+- `GET /api/insights/[insightId]`
+- `PATCH /api/insights/[insightId]`
+
+Database entities added:
+
+- `Alert`
+- `Insight`
+
+Database changes:
+
+- `AlertSeverity`
+- `AlertStatus`
+- `AlertType`
+- `AlertSourceType`
+- `InsightSeverity`
+- `InsightStatus`
+- `InsightType`
+- `SchoolSettings.late_student_threshold`
+- `SchoolSettings.movement_threshold`
+- `SchoolSettings.noise_event_threshold`
+- `SchoolSettings.device_offline_threshold`
+
 Not implemented:
 
 - Weekly summary generation.
@@ -847,7 +917,7 @@ Tenant root record.
 
 Key relationships:
 
-- Owns SchoolAdmins, SchoolSettings, AcademicYears, SchoolLevels, Classrooms, ClassroomDevices, CardCredentials, RFIDScanEvents, AttendanceSessions, AttendanceRecords, Teachers, Students, Subscriptions, and Sessions.
+- Owns SchoolAdmins, SchoolSettings, AcademicYears, SchoolLevels, Classrooms, ClassroomDevices, CardCredentials, RFIDScanEvents, AttendanceSessions, AttendanceRecords, Teachers, Students, Alerts, Insights, Subscriptions, and Sessions.
 
 Important constraints:
 
@@ -887,6 +957,11 @@ Important constraints:
 - Unique `school_id`.
 - `language` uses `AR` or `EN`.
 - Stores alert toggles and operational thresholds.
+- Stores Phase 2H deterministic rule thresholds:
+  - `late_student_threshold`
+  - `movement_threshold`
+  - `noise_event_threshold`
+  - `device_offline_threshold`
 
 ### AcademicYear
 
@@ -1133,6 +1208,49 @@ Important constraints:
 - Simple operational presence tracking only.
 - Does not implement teacher attendance scoring, payroll, or schedule management.
 
+### Alert
+
+Purpose:
+
+Immediate deterministic operational event derived from existing attendance, movement, noise, or device data.
+
+Key relationships:
+
+- Belongs to School.
+- May reference Classroom.
+- May reference Teacher.
+- May reference Student.
+- May reference ClassroomDevice.
+
+Important constraints:
+
+- Every alert includes `school_id`.
+- Alert status is `OPEN`, `ACKNOWLEDGED`, or `RESOLVED`.
+- Alert severity is `INFO`, `WARNING`, or `CRITICAL`.
+- `source_key` prevents duplicate records for the same deterministic source event.
+- Alerts do not deliver notifications; delivery channels are not implemented.
+
+### Insight
+
+Purpose:
+
+Accumulated deterministic operational pattern derived from repeated attendance, movement, noise, or device conditions.
+
+Key relationships:
+
+- Belongs to School.
+- May reference Classroom.
+- May reference Teacher.
+- May reference Student.
+
+Important constraints:
+
+- Every insight includes `school_id`.
+- Insight status is `ACTIVE`, `DISMISSED`, or `RESOLVED`.
+- Insight severity is `LOW`, `MEDIUM`, or `HIGH`.
+- `source_key` prevents duplicate active pattern records for the same deterministic subject.
+- Insights are not AI, ML, prediction, reports, recommendations, or rankings.
+
 ### Teacher
 
 Purpose:
@@ -1358,6 +1476,22 @@ Permission terms:
 | GET | `/api/noise/classrooms` | List classroom live noise states and daily summaries | Tenant scoped |
 | GET | `/api/noise/classrooms/[classroomId]` | Show one classroom noise state, summary, and recent events | Tenant scoped |
 | GET | `/api/noise/teachers` | List teacher-linked daily noise summaries | Tenant scoped |
+
+### Alerts
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| GET | `/api/alerts` | Run deterministic operational rules and list alerts with pagination and filters | Tenant scoped |
+| GET | `/api/alerts/[alertId]` | Get one alert | Tenant scoped |
+| PATCH | `/api/alerts/[alertId]` | Update alert status | Tenant scoped |
+
+### Insights
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| GET | `/api/insights` | Run deterministic operational rules and list insights with pagination and filters | Tenant scoped |
+| GET | `/api/insights/[insightId]` | Get one insight | Tenant scoped |
+| PATCH | `/api/insights/[insightId]` | Update insight status | Tenant scoped |
 
 ### Teachers
 
@@ -1779,15 +1913,16 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2F.1 Direction & Session Integrity Correction
 - Phase 2G Live Noise Monitoring, Classroom Averages & Teacher-Linked Noise Scoring Foundation
 - Phase 2G.1 Scoring & Summary Architecture Correction
+- Phase 2H Operational Intelligence Foundation
 
 ### Next
 
-- Phase 2H Reporting
+- Reporting Engine
 - Phase 3.0 AI Layer
 
 ### Planned Detail
 
-Phase 2H Reporting:
+Reporting Engine:
 
 - Intended to add reporting data models, generation, and exports.
 
@@ -1864,4 +1999,4 @@ This master document was created from verified repository files:
 - `components/language-provider.tsx`
 - Existing phase documentation under `docs/`
 
-No application code, database schema, UI, or migrations were changed to create this document.
+The document is maintained alongside implementation phases and should be updated whenever committed architecture changes.

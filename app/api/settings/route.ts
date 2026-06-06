@@ -64,6 +64,10 @@ export async function PATCH(request: Request) {
       0,
       60,
     )
+    const lateStudentThreshold = clampNumber(body?.lateStudentThreshold ?? body?.late_student_threshold, 1, 50)
+    const movementThreshold = clampNumber(body?.movementThreshold ?? body?.movement_threshold, 1, 50)
+    const noiseEventThreshold = clampNumber(body?.noiseEventThreshold ?? body?.noise_event_threshold, 1, 100)
+    const deviceOfflineThreshold = clampNumber(body?.deviceOfflineThreshold ?? body?.device_offline_threshold, 1, 30)
 
     const settings = await prisma.schoolSettings.update({
       where: { schoolId },
@@ -73,6 +77,10 @@ export async function PATCH(request: Request) {
         noiseDurationSeconds,
         studentExitLimitMinutes,
         lateThresholdMinutes,
+        lateStudentThreshold,
+        movementThreshold,
+        noiseEventThreshold,
+        deviceOfflineThreshold,
         noiseAlertsEnabled: optionalBoolean(body?.noiseAlertsEnabled ?? body?.noise_alerts_enabled),
         movementAlertsEnabled: optionalBoolean(body?.movementAlertsEnabled ?? body?.movement_alerts_enabled),
         attendanceAlertsEnabled: optionalBoolean(body?.attendanceAlertsEnabled ?? body?.attendance_alerts_enabled),
