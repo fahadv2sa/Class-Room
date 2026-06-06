@@ -64,6 +64,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2C Teachers and Students Foundation
 - Phase 2B.6R Native Internationalization Refactor
 - Phase 2D Classroom Device Foundation
+- Phase 2E RFID Attendance Engine Foundation
 
 ### In Progress
 
@@ -71,9 +72,9 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 
 ### Planned
 
-- Phase 2E RFID + Attendance
 - Phase 2F Movement Tracking
-- Phase 2G Reporting
+- Phase 2G Noise Monitoring
+- Phase 2H Reporting
 - Phase 3.0 AI Layer
 
 ### Phase 2A: SaaS Foundation
@@ -354,6 +355,62 @@ Database entities added:
 
 - `ClassroomDevice`
 
+### Phase 2E: RFID Attendance Engine Foundation
+
+Objective:
+
+Create the foundation for RFID-based classroom attendance using the single integrated Class-Room Device installed in each classroom.
+
+Implemented:
+
+- `CardCredential` registry for physical student and teacher cards.
+- `RFIDScanEvent` raw scan event history.
+- `ClassroomAttendanceSession` for classroom attendance sessions.
+- `StudentAttendanceRecord` for per-student attendance state inside a session.
+- Authenticated RFID scan simulation endpoint.
+- Duplicate scan protection using `source_event_id` and a conservative 10-second repeated-scan window.
+- Attendance session APIs.
+- Attendance record listing API.
+- Database-backed Attendance page data loading.
+- Seeded card credentials for all seeded teachers and students.
+- Seeded classroom attendance sessions and attendance records for seeded classrooms.
+
+Major architectural decisions:
+
+- RFID scans come from the existing integrated `ClassroomDevice`.
+- No standalone RFID reader, noise sensor, gateway, or other separate hardware device model was created.
+- Future scans resolve through `CardCredential`, while existing `Teacher.card_code` and `Student.card_code` remain in place.
+- Unknown cards are stored as `RFIDScanEvent` rows instead of being silently discarded.
+- Student entry scans update attendance records only; they do not create movement analytics.
+- Teacher scans are stored and teacher entry may associate a teacher with the open classroom attendance session.
+
+APIs added:
+
+- `POST /api/rfid/scans`
+- `GET /api/rfid/scans`
+- `GET /api/attendance-sessions`
+- `POST /api/attendance-sessions`
+- `GET /api/attendance-sessions/[sessionId]`
+- `PATCH /api/attendance-sessions/[sessionId]`
+- `POST /api/attendance-sessions/[sessionId]/close`
+- `GET /api/attendance-records`
+
+Database entities added:
+
+- `CardCredential`
+- `RFIDScanEvent`
+- `ClassroomAttendanceSession`
+- `StudentAttendanceRecord`
+
+Not implemented:
+
+- Movement tracking analytics.
+- Noise telemetry.
+- Reporting engine.
+- AI.
+- Real device authentication.
+- MQTT, offline queues, real-time streaming, or firmware logic.
+
 ---
 
 ## 3. System Architecture
@@ -442,6 +499,8 @@ Migrations:
 - `20260606130000_academic_structure_foundation`
 - `20260606133000_language_settings_persistence`
 - `20260606143000_teachers_students_foundation`
+- `20260606160000_classroom_device_foundation`
+- `20260606170000_rfid_attendance_engine_foundation`
 
 ### Authentication
 
@@ -573,7 +632,7 @@ Tenant root record.
 
 Key relationships:
 
-- Owns SchoolAdmins, SchoolSettings, AcademicYears, SchoolLevels, Classrooms, ClassroomDevices, Teachers, Students, Subscriptions, and Sessions.
+- Owns SchoolAdmins, SchoolSettings, AcademicYears, SchoolLevels, Classrooms, ClassroomDevices, CardCredentials, RFIDScanEvents, AttendanceSessions, AttendanceRecords, Teachers, Students, Subscriptions, and Sessions.
 
 Important constraints:
 
@@ -625,6 +684,7 @@ Key relationships:
 - Belongs to School.
 - Owns SchoolLevels.
 - Owns Classrooms.
+- Owns ClassroomAttendanceSessions.
 
 Important constraints:
 
@@ -661,6 +721,7 @@ Key relationships:
 - Belongs to SchoolLevel.
 - Has Students.
 - Has ClassroomDevices.
+- Has RFIDScanEvents, AttendanceSessions, and AttendanceRecords.
 
 Important constraints:
 
@@ -676,6 +737,9 @@ Integrated Class-Room Device installed for one classroom.
 Key relationships:
 
 - Belongs to School.
+- Has CardCredentials.
+- May be associated with ClassroomAttendanceSessions.
+- May be referenced by RFIDScanEvents.
 - Belongs to Classroom.
 
 Important constraints:
@@ -689,6 +753,89 @@ Important constraints:
 - `connection_status` is `ONLINE`, `OFFLINE`, or `UNKNOWN`.
 - `capabilities` stores future-safe integrated device capabilities such as `RFID`, `NOISE_MONITORING`, `LED_INDICATORS`, and `FIRMWARE_UPDATES`.
 - Provisioning metadata stores hashes and timestamps only; raw pairing tokens must not be stored.
+
+### CardCredential
+
+Purpose:
+
+Registry for physical RFID/NFC/QR/mobile-style cards assigned to students and teachers.
+
+Key relationships:
+
+- Belongs to School.
+- Belongs to either Student or Teacher.
+- Can be referenced by RFIDScanEvent.
+
+Important constraints:
+
+- `card_code` is globally unique.
+- Supports existing `STD-########` and `TCH-########` formats.
+- Allows only one active card per student.
+- Allows only one active card per teacher.
+- Existing `Student.card_code` and `Teacher.card_code` remain in place for backward compatibility.
+
+### RFIDScanEvent
+
+Purpose:
+
+Raw scan event history from the integrated Class-Room Device.
+
+Key relationships:
+
+- Belongs to School.
+- Belongs to ClassroomDevice.
+- Belongs to Classroom.
+- May reference CardCredential.
+- May reference Student or Teacher.
+- May link to another scan event as a duplicate.
+
+Important constraints:
+
+- Always stores raw `card_code`, including unknown cards.
+- Stores `actor_type`, `scan_direction`, and `scan_status`.
+- Duplicate protection links repeated scans instead of processing them twice.
+- Does not create movement records.
+
+### ClassroomAttendanceSession
+
+Purpose:
+
+Attendance session for one classroom using one integrated classroom device.
+
+Key relationships:
+
+- Belongs to School.
+- Belongs to AcademicYear.
+- Belongs to Classroom.
+- Belongs to ClassroomDevice.
+- May reference Teacher.
+- Owns StudentAttendanceRecords.
+
+Important constraints:
+
+- Status is `OPEN` or `CLOSED`.
+- Allows only one open session per classroom.
+- This is not a timetable or schedule system.
+
+### StudentAttendanceRecord
+
+Purpose:
+
+Per-student attendance state inside a classroom attendance session.
+
+Key relationships:
+
+- Belongs to School.
+- Belongs to ClassroomAttendanceSession.
+- Belongs to Classroom.
+- Belongs to Student.
+
+Important constraints:
+
+- Unique `attendance_session_id + student_id`.
+- Status is `ABSENT`, `PRESENT`, `LATE`, or `EXCUSED`.
+- ENTRY scans can mark a student present.
+- EXIT scans can update `last_exit_at` only; movement analytics are future Phase 2F.
 
 ### Teacher
 
@@ -718,6 +865,9 @@ Key relationships:
 
 - Belongs to School.
 - Belongs to Classroom.
+- Has CardCredentials.
+- Has StudentAttendanceRecords.
+- May be referenced by RFIDScanEvents.
 
 Important constraints:
 
@@ -865,6 +1015,29 @@ Permission terms:
 | GET | `/api/classroom-devices/[deviceId]` | Get one classroom device | Tenant scoped |
 | PATCH | `/api/classroom-devices/[deviceId]` | Update classroom assignment, firmware/hardware metadata, status, connection status, notes, capabilities, and provisioning metadata | Tenant scoped |
 
+### RFID Scans
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| POST | `/api/rfid/scans` | Authenticated RFID scan simulation/ingestion for the integrated classroom device | Tenant scoped |
+| GET | `/api/rfid/scans` | List raw RFID scan events with pagination and filters | Tenant scoped |
+
+### Attendance Sessions
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| GET | `/api/attendance-sessions` | List classroom attendance sessions | Tenant scoped |
+| POST | `/api/attendance-sessions` | Create an open classroom attendance session and ABSENT records for active students | Tenant scoped with writable school |
+| GET | `/api/attendance-sessions/[sessionId]` | Get one attendance session | Tenant scoped |
+| PATCH | `/api/attendance-sessions/[sessionId]` | Update basic session metadata | Tenant scoped |
+| POST | `/api/attendance-sessions/[sessionId]/close` | Close an open attendance session | Tenant scoped |
+
+### Attendance Records
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| GET | `/api/attendance-records` | List per-student attendance records with pagination and filters | Tenant scoped |
+
 ### Teachers
 
 | Method | Route | Purpose | Permissions |
@@ -999,7 +1172,7 @@ STD-10000001
 
 ### Purpose
 
-Card identities are reserved for future:
+Card identities are used by the Phase 2E attendance foundation and remain compatible with future:
 
 - RFID cards
 - NFC cards
@@ -1009,8 +1182,10 @@ Card identities are reserved for future:
 Current status:
 
 - Card identity fields exist on Teacher and Student.
-- Card scanning is not implemented.
-- RFID attendance is not implemented.
+- CardCredential registry exists for physical student and teacher cards.
+- Authenticated RFID scan simulation stores raw scan events.
+- RFID attendance sessions and student attendance records are implemented.
+- Production hardware authentication is not implemented yet.
 
 ---
 
@@ -1033,7 +1208,7 @@ These rules are mandatory for future AI tools and developers.
 13. Do not scatter hardcoded bilingual conditionals across pages.
 14. Do not create new database entities unless the phase explicitly requires them.
 15. Do not start future phases early.
-16. Do not extend beyond the implemented classroom device foundation into RFID, attendance engine, reports engine, or AI unless explicitly requested.
+16. Do not extend beyond the implemented classroom device and RFID attendance foundations into movement tracking, noise telemetry, reports engine, or AI unless explicitly requested.
 17. Preserve `school_code` as permanent and unique.
 18. Use `school_id` internally for foreign keys.
 19. Preserve card identity formats.
@@ -1118,8 +1293,8 @@ Not implemented:
 
 - Provisioning workflow.
 - Live device telemetry ingestion.
-- RFID scanning.
-- Attendance calculation.
+- Production hardware RFID scanning.
+- Device-authenticated attendance ingestion.
 - Movement tracking.
 - Noise telemetry processing.
 
@@ -1129,29 +1304,43 @@ The current `/devices` page keeps the approved dashboard layout and now loads cl
 
 ---
 
-## 12. RFID Roadmap
+## 12. RFID Attendance Foundation
 
-Status: planned, not implemented.
+Status: Phase 2E foundation implemented.
 
-Intended purpose:
+Implemented purpose:
 
-Use Teacher and Student `card_code` identities for future RFID/NFC/QR/mobile identity workflows.
+Use Teacher and Student card identities through CardCredential records for RFID-based classroom attendance.
 
-Planned architecture direction:
+Implemented architecture:
 
-- RFID events should include `school_id`.
-- RFID events should reference known card identities.
-- Student attendance should resolve from `card_code` to Student.
-- Teacher identity may resolve from `card_code` to Teacher.
-- Device-to-school assignment should prevent cross-school card/event leakage.
+- RFID scans come from the existing integrated Class-Room Device.
+- RFID scan events include `school_id`.
+- RFID scan events preserve raw `card_code`.
+- Known cards resolve through CardCredential.
+- Student attendance resolves from CardCredential to Student.
+- Teacher identity resolves from CardCredential to Teacher.
+- Device, classroom, card, student, teacher, session, and record relations are tenant scoped.
+- Duplicate scans are stored and linked when detected.
+- Attendance updates do not create movement analytics.
+
+Implemented:
+
+- CardCredential registry.
+- Raw RFIDScanEvent history.
+- Authenticated scan simulation API.
+- ClassroomAttendanceSession.
+- StudentAttendanceRecord.
+- Database-backed Attendance page.
 
 Not implemented:
 
-- RFID scanning.
-- RFID event ingestion.
-- Attendance calculation.
-- Card registration workflow.
-- Device-card binding.
+- Production device authentication.
+- MQTT or real-time streaming.
+- Offline device queue.
+- Firmware logic.
+- Movement analytics.
+- Reporting engine.
 
 ---
 
@@ -1250,25 +1439,26 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2C Teachers and Students Foundation
 - Phase 2B.6R Native Internationalization Refactor
 - Phase 2D Classroom Device Foundation
+- Phase 2E RFID Attendance Engine Foundation
 
 ### Next
 
-- Phase 2E RFID + Attendance
 - Phase 2F Movement Tracking
-- Phase 2G Reporting
+- Phase 2G Noise Monitoring
+- Phase 2H Reporting
 - Phase 3.0 AI Layer
 
 ### Planned Detail
-
-Phase 2E RFID + Attendance:
-
-- Intended to add card scanning/event ingestion and attendance calculation.
 
 Phase 2F Movement Tracking:
 
 - Intended to add student exit/return tracking and movement rules.
 
-Phase 2G Reporting:
+Phase 2G Noise Monitoring:
+
+- Intended to add noise telemetry processing from the integrated Class-Room Device.
+
+Phase 2H Reporting:
 
 - Intended to add reporting data models, generation, and exports.
 

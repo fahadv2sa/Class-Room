@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { StatCard } from '@/components/stat-card'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Table, THead, TR, TH, TD } from '@/components/ui/table'
 import { AttendanceBarChart } from '@/components/charts'
 import { useLevel } from '@/components/level-provider'
-import { getStudents, getAttendanceByClass, getKpis, levelMap } from '@/lib/mock-data'
+import { levelMap } from '@/lib/mock-data'
 import { useLanguage } from '@/components/language-provider'
 import { minutes, withLevel } from '@/lib/i18n/ui'
 import {
@@ -21,14 +21,32 @@ import {
 } from 'lucide-react'
 
 type Row = {
+  id: string
   student: string
   classroom: string
   firstIn: string
   lastOut: string
   status: 'present' | 'absent' | 'late' | 'noScan'
   absenceInSession: string
-  exits: number
+  scanCount: number
   updated: string
+}
+
+type AttendanceRecord = {
+  id: string
+  status: 'ABSENT' | 'PRESENT' | 'LATE' | 'EXCUSED'
+  firstEntryAt: string | null
+  lastExitAt: string | null
+  scanCount: number
+  updatedAt: string
+  student: {
+    fullNameAr: string
+    fullNameEn: string
+    cardCode: string
+  }
+  classroom: {
+    classroomCode: string
+  }
 }
 
 const statusBadge: Record<Row['status'], 'success' | 'danger' | 'warning' | 'accent'> = {
@@ -45,42 +63,88 @@ const statusLabelKey: Record<Row['status'], string> = {
   noScan: 'attendance.noCardScan',
 }
 
+const levelTypeByLevel = {
+  primary: 'PRIMARY',
+  middle: 'MIDDLE',
+  high: 'HIGH',
+}
+
 export default function AttendancePage() {
   const { level } = useLevel()
-  const { t } = useLanguage()
+  const { language, t } = useLanguage()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<'all' | Row['status']>('all')
+  const [records, setRecords] = useState<AttendanceRecord[]>([])
+  const [loading, setLoading] = useState(true)
 
   const lvl = level ? levelMap[level] : null
-  const rows = useMemo<Row[]>(() => {
-    if (!level) return []
-    return getStudents(level).map((s, i) => {
-      const status: Row['status'] =
-        s.status === 'absent'
-          ? 'absent'
-          : i % 7 === 3
-            ? 'late'
-            : i % 11 === 5
-              ? 'noScan'
-              : 'present'
-      return {
-        student: s.name,
-        classroom: s.classroom,
-        firstIn: s.status === 'absent' ? '—' : ['07:18', '07:22', '07:25', '07:31'][i % 4],
-        lastOut: s.status === 'outside' ? s.lastMovement.split('·')[1]?.trim() ?? '—' : '—',
-        status,
-        absenceInSession: status === 'present' ? minutes(0, t) : minutes((i % 4) * 5 + 5, t),
-        exits: s.exits,
-        updated: ['قبل دقيقة', 'قبل 3 دقائق', 'قبل 6 دقائق'][i % 3],
+
+  useEffect(() => {
+    let active = true
+
+    async function loadAttendance() {
+      if (!level) return
+      try {
+        setLoading(true)
+        const res = await fetch(`/api/attendance-records?level=${levelTypeByLevel[level]}&pageSize=100`, {
+          cache: 'no-store',
+        })
+        if (!res.ok) throw new Error('Could not load attendance records')
+        const data = await res.json()
+        if (active) setRecords(data.records ?? [])
+      } catch {
+        if (active) setRecords([])
+      } finally {
+        if (active) setLoading(false)
       }
-    })
+    }
+
+    loadAttendance()
+    return () => {
+      active = false
+    }
   }, [level])
 
-  const attendanceByClass = useMemo(
-    () => (level ? getAttendanceByClass(level) : []),
-    [level],
-  )
-  const kpis = level ? getKpis(level) : null
+  const rows = useMemo<Row[]>(() => {
+    return records.map((record) => {
+      const status: Row['status'] =
+        record.status === 'PRESENT'
+          ? 'present'
+          : record.status === 'LATE'
+            ? 'late'
+            : record.scanCount === 0 && record.status !== 'ABSENT'
+              ? 'noScan'
+              : 'absent'
+
+      return {
+        id: record.id,
+        student: language === 'EN' ? record.student.fullNameEn : record.student.fullNameAr,
+        classroom: record.classroom.classroomCode,
+        firstIn: formatTime(record.firstEntryAt),
+        lastOut: formatTime(record.lastExitAt),
+        status,
+        absenceInSession: minutes(0, t),
+        scanCount: record.scanCount,
+        updated: formatTime(record.updatedAt),
+      }
+    })
+  }, [records, language, t])
+
+  const attendanceByClass = useMemo(() => {
+    const grouped = new Map<string, { total: number; present: number }>()
+
+    rows.forEach((row) => {
+      const current = grouped.get(row.classroom) ?? { total: 0, present: 0 }
+      current.total += 1
+      if (row.status === 'present' || row.status === 'late') current.present += 1
+      grouped.set(row.classroom, current)
+    })
+
+    return Array.from(grouped.entries()).map(([name, value]) => ({
+      name,
+      حضور: value.total ? Math.round((value.present / value.total) * 100) : 0,
+    }))
+  }, [rows])
 
   const filtered = useMemo(
     () =>
@@ -92,7 +156,7 @@ export default function AttendancePage() {
     [rows, q, filter],
   )
 
-  if (!level || !lvl || !kpis) return null
+  if (!level || !lvl) return null
 
   const present = rows.filter((r) => r.status === 'present').length
   const absent = rows.filter((r) => r.status === 'absent').length
@@ -159,20 +223,34 @@ export default function AttendancePage() {
                 <TH>{t('attendance.lastOut')}</TH>
                 <TH>{t('common.status')}</TH>
                 <TH>{t('attendance.absenceDuration')}</TH>
-                <TH>{t('attendance.exitCount')}</TH>
+                <TH>{t('attendance.scanCount')}</TH>
                 <TH>{t('common.lastUpdate')}</TH>
               </TR>
             </THead>
             <tbody>
-              {filtered.map((r, i) => (
-                <TR key={i}>
+              {loading && (
+                <TR>
+                  <TD colSpan={8} className="text-center text-sm text-muted-foreground">
+                    {t('common.loading')}
+                  </TD>
+                </TR>
+              )}
+              {!loading && filtered.length === 0 && (
+                <TR>
+                  <TD colSpan={8} className="text-center text-sm text-muted-foreground">
+                    {t('attendance.empty')}
+                  </TD>
+                </TR>
+              )}
+              {!loading && filtered.map((r) => (
+                <TR key={r.id}>
                   <TD className="font-bold">{r.student}</TD>
                   <TD className="text-muted-foreground">{r.classroom}</TD>
                   <TD className="tabular-nums">{r.firstIn}</TD>
                   <TD className="tabular-nums">{r.lastOut}</TD>
                   <TD><Badge variant={statusBadge[r.status]}>{t(statusLabelKey[r.status])}</Badge></TD>
                   <TD className="tabular-nums">{r.absenceInSession}</TD>
-                  <TD className="tabular-nums">{r.exits}</TD>
+                  <TD className="tabular-nums">{r.scanCount}</TD>
                   <TD className="text-xs text-muted-foreground">{r.updated}</TD>
                 </TR>
               ))}
@@ -182,4 +260,12 @@ export default function AttendancePage() {
       </div>
     </DashboardShell>
   )
+}
+
+function formatTime(value: string | null) {
+  if (!value) return '-'
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
 }

@@ -1,0 +1,341 @@
+import type {
+  AuthContext,
+} from '@/lib/auth/session'
+import type {
+  RFIDScanDirection,
+  RFIDScanStatus,
+} from '@prisma/client'
+import { assertSameSchool } from '@/lib/academic/access'
+import { prisma } from '@/lib/prisma'
+
+const DUPLICATE_WINDOW_MS = 10_000
+
+export type ProcessRFIDScanInput = {
+  auth: AuthContext
+  classroomDeviceId?: string | null
+  deviceCode?: string | null
+  cardCode: string
+  scanDirection?: string | null
+  scannedAt?: string | Date | null
+  sourceEventId?: string | null
+  notes?: string | null
+}
+
+export function normalizeCardCode(value: unknown) {
+  const code = String(value ?? '').trim().toUpperCase()
+  if (!/^(STD|TCH)-\d{8}$/.test(code)) {
+    throw new Response('cardCode must use STD-######## or TCH-######## format', { status: 400 })
+  }
+  return code
+}
+
+export function normalizeScanDirection(value: unknown): RFIDScanDirection {
+  const direction = String(value ?? 'ENTRY').trim().toUpperCase()
+  if (direction === 'ENTRY' || direction === 'EXIT' || direction === 'UNKNOWN') return direction
+  throw new Response('scanDirection must be ENTRY, EXIT, or UNKNOWN', { status: 400 })
+}
+
+export function dateFromInput(value: unknown) {
+  if (value === undefined || value === null || value === '') return new Date()
+  const date = new Date(String(value))
+  if (Number.isNaN(date.getTime())) throw new Response('Invalid scannedAt value', { status: 400 })
+  return date
+}
+
+export function sessionDate(value: Date) {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()))
+}
+
+export async function ensureAttendanceRecords(sessionId: string, schoolId: string, classroomId: string) {
+  const students = await prisma.student.findMany({
+    where: {
+      schoolId,
+      classroomId,
+      status: 'ACTIVE',
+    },
+    select: { id: true },
+  })
+
+  if (!students.length) return
+
+  await prisma.studentAttendanceRecord.createMany({
+    data: students.map((student) => ({
+      schoolId,
+      attendanceSessionId: sessionId,
+      classroomId,
+      studentId: student.id,
+      status: 'ABSENT',
+    })),
+    skipDuplicates: true,
+  })
+}
+
+export async function findOrCreateOpenSession({
+  schoolId,
+  classroomId,
+  classroomDeviceId,
+  teacherId,
+  at,
+}: {
+  schoolId: string
+  classroomId: string
+  classroomDeviceId: string
+  teacherId?: string | null
+  at: Date
+}) {
+  const existing = await prisma.classroomAttendanceSession.findFirst({
+    where: { schoolId, classroomId, status: 'OPEN' },
+  })
+
+  if (existing) {
+    await ensureAttendanceRecords(existing.id, schoolId, classroomId)
+    return existing
+  }
+
+  const academicYear = await prisma.academicYear.findFirst({
+    where: { schoolId, isActive: true },
+    orderBy: { startDate: 'desc' },
+  })
+  if (!academicYear) throw new Response('No active academic year found for school', { status: 400 })
+
+  const created = await prisma.classroomAttendanceSession.create({
+    data: {
+      schoolId,
+      academicYearId: academicYear.id,
+      classroomId,
+      classroomDeviceId,
+      teacherId: teacherId ?? null,
+      sessionDate: sessionDate(at),
+      status: 'OPEN',
+      openedAt: at,
+    },
+  })
+
+  await ensureAttendanceRecords(created.id, schoolId, classroomId)
+  return created
+}
+
+async function createScanEvent({
+  schoolId,
+  classroomDeviceId,
+  classroomId,
+  cardCredentialId,
+  cardCode,
+  actorType,
+  studentId,
+  teacherId,
+  scanDirection,
+  scanStatus,
+  scannedAt,
+  sourceEventId,
+  duplicateOfEventId,
+  notes,
+}: {
+  schoolId: string
+  classroomDeviceId: string
+  classroomId: string
+  cardCredentialId?: string | null
+  cardCode: string
+  actorType: 'STUDENT' | 'TEACHER' | 'UNKNOWN'
+  studentId?: string | null
+  teacherId?: string | null
+  scanDirection: RFIDScanDirection
+  scanStatus: RFIDScanStatus
+  scannedAt: Date
+  sourceEventId?: string | null
+  duplicateOfEventId?: string | null
+  notes?: string | null
+}) {
+  return prisma.rFIDScanEvent.create({
+    data: {
+      schoolId,
+      classroomDeviceId,
+      classroomId,
+      cardCredentialId: cardCredentialId ?? null,
+      cardCode,
+      actorType,
+      studentId: studentId ?? null,
+      teacherId: teacherId ?? null,
+      scanDirection,
+      scanStatus,
+      scannedAt,
+      sourceEventId: sourceEventId || null,
+      duplicateOfEventId: duplicateOfEventId ?? null,
+      notes: notes || null,
+    },
+  })
+}
+
+export async function processRFIDScan(input: ProcessRFIDScanInput) {
+  const cardCode = normalizeCardCode(input.cardCode)
+  const scanDirection = normalizeScanDirection(input.scanDirection)
+  const scannedAt = dateFromInput(input.scannedAt)
+  const sourceEventId = String(input.sourceEventId ?? '').trim() || null
+
+  const device = await prisma.classroomDevice.findFirstOrThrow({
+    where: input.classroomDeviceId
+      ? { id: input.classroomDeviceId }
+      : { deviceCode: String(input.deviceCode ?? '').trim().toUpperCase() },
+    include: { classroom: true },
+  })
+  assertSameSchool(input.auth, device.schoolId)
+
+  if (sourceEventId) {
+    const sourceDuplicate = await prisma.rFIDScanEvent.findFirst({
+      where: {
+        classroomDeviceId: device.id,
+        sourceEventId,
+      },
+    })
+
+    if (sourceDuplicate) {
+      const event = await createScanEvent({
+        schoolId: device.schoolId,
+        classroomDeviceId: device.id,
+        classroomId: device.classroomId,
+        cardCode,
+        actorType: 'UNKNOWN',
+        scanDirection,
+        scanStatus: 'DUPLICATE_IGNORED',
+        scannedAt,
+        sourceEventId,
+        duplicateOfEventId: sourceDuplicate.id,
+        notes: input.notes,
+      })
+      return { event, scanStatus: event.scanStatus, duplicate: true, attendanceSession: null, attendanceRecord: null }
+    }
+  } else {
+    const windowDuplicate = await prisma.rFIDScanEvent.findFirst({
+      where: {
+        classroomDeviceId: device.id,
+        cardCode,
+        scanDirection,
+        scanStatus: { not: 'DUPLICATE_IGNORED' },
+        scannedAt: {
+          gte: new Date(scannedAt.getTime() - DUPLICATE_WINDOW_MS),
+          lte: new Date(scannedAt.getTime() + DUPLICATE_WINDOW_MS),
+        },
+      },
+      orderBy: { scannedAt: 'desc' },
+    })
+
+    if (windowDuplicate) {
+      const event = await createScanEvent({
+        schoolId: device.schoolId,
+        classroomDeviceId: device.id,
+        classroomId: device.classroomId,
+        cardCode,
+        actorType: 'UNKNOWN',
+        scanDirection,
+        scanStatus: 'DUPLICATE_IGNORED',
+        scannedAt,
+        duplicateOfEventId: windowDuplicate.id,
+        notes: input.notes,
+      })
+      return { event, scanStatus: event.scanStatus, duplicate: true, attendanceSession: null, attendanceRecord: null }
+    }
+  }
+
+  const credential = await prisma.cardCredential.findUnique({
+    where: { cardCode },
+    include: { student: true, teacher: true },
+  })
+
+  let scanStatus: RFIDScanStatus = 'ACCEPTED'
+  let actorType: 'STUDENT' | 'TEACHER' | 'UNKNOWN' = 'UNKNOWN'
+  let studentId: string | null = null
+  let teacherId: string | null = null
+
+  if (!credential) {
+    scanStatus = 'UNKNOWN_CARD'
+  } else if (credential.schoolId !== device.schoolId) {
+    scanStatus = 'WRONG_SCHOOL'
+  } else if (credential.status !== 'ACTIVE') {
+    scanStatus = 'INACTIVE_CARD'
+  } else if (credential.holderType === 'STUDENT') {
+    actorType = 'STUDENT'
+    studentId = credential.studentId
+    if (credential.student?.classroomId !== device.classroomId) scanStatus = 'WRONG_CLASSROOM'
+  } else if (credential.holderType === 'TEACHER') {
+    actorType = 'TEACHER'
+    teacherId = credential.teacherId
+  }
+
+  const event = await createScanEvent({
+    schoolId: device.schoolId,
+    classroomDeviceId: device.id,
+    classroomId: device.classroomId,
+    cardCredentialId: credential?.id,
+    cardCode,
+    actorType,
+    studentId,
+    teacherId,
+    scanDirection,
+    scanStatus,
+    scannedAt,
+    sourceEventId,
+    notes: input.notes,
+  })
+
+  if (scanStatus !== 'ACCEPTED') {
+    return { event, scanStatus, duplicate: false, attendanceSession: null, attendanceRecord: null }
+  }
+
+  if (actorType === 'TEACHER' && teacherId && scanDirection === 'ENTRY') {
+    const attendanceSession = await prisma.classroomAttendanceSession.findFirst({
+      where: {
+        schoolId: device.schoolId,
+        classroomId: device.classroomId,
+        status: 'OPEN',
+      },
+    })
+
+    if (attendanceSession && !attendanceSession.teacherId) {
+      const updatedSession = await prisma.classroomAttendanceSession.update({
+        where: { id: attendanceSession.id },
+        data: { teacherId },
+      })
+      return { event, scanStatus, duplicate: false, attendanceSession: updatedSession, attendanceRecord: null }
+    }
+
+    return { event, scanStatus, duplicate: false, attendanceSession, attendanceRecord: null }
+  }
+
+  if (actorType === 'STUDENT' && studentId) {
+    const attendanceSession = await findOrCreateOpenSession({
+      schoolId: device.schoolId,
+      classroomId: device.classroomId,
+      classroomDeviceId: device.id,
+      at: scannedAt,
+    })
+
+    const attendanceRecord = await prisma.studentAttendanceRecord.upsert({
+      where: {
+        attendanceSessionId_studentId: {
+          attendanceSessionId: attendanceSession.id,
+          studentId,
+        },
+      },
+      update: {
+        status: scanDirection === 'ENTRY' ? 'PRESENT' : undefined,
+        firstEntryAt: scanDirection === 'ENTRY' ? scannedAt : undefined,
+        lastExitAt: scanDirection === 'EXIT' ? scannedAt : undefined,
+        scanCount: { increment: 1 },
+      },
+      create: {
+        schoolId: device.schoolId,
+        attendanceSessionId: attendanceSession.id,
+        classroomId: device.classroomId,
+        studentId,
+        status: scanDirection === 'ENTRY' ? 'PRESENT' : 'ABSENT',
+        firstEntryAt: scanDirection === 'ENTRY' ? scannedAt : null,
+        lastExitAt: scanDirection === 'EXIT' ? scannedAt : null,
+        scanCount: 1,
+      },
+    })
+
+    return { event, scanStatus, duplicate: false, attendanceSession, attendanceRecord }
+  }
+
+  return { event, scanStatus, duplicate: false, attendanceSession: null, attendanceRecord: null }
+}

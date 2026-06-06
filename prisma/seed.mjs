@@ -437,6 +437,31 @@ async function main() {
           cardCode: teacherCardCode,
         },
       })
+
+      await prisma.cardCredential.upsert({
+        where: { cardCode: teacherCardCode },
+        update: {
+          schoolId: school.id,
+          holderType: 'TEACHER',
+          studentId: null,
+          teacherId,
+          status: 'ACTIVE',
+          issuedAt: new Date('2026-08-01T08:00:00.000Z'),
+          deactivatedAt: null,
+          notes: null,
+        },
+        create: {
+          id: deterministicId(school.id, teacherId, 'card-credential'),
+          schoolId: school.id,
+          cardCode: teacherCardCode,
+          holderType: 'TEACHER',
+          teacherId,
+          status: 'ACTIVE',
+          issuedAt: new Date('2026-08-01T08:00:00.000Z'),
+          deactivatedAt: null,
+          notes: null,
+        },
+      })
     }
 
     for (const classroom of seededClassrooms) {
@@ -487,7 +512,89 @@ async function main() {
             status: 'ACTIVE',
           },
         })
+
+        await prisma.cardCredential.upsert({
+          where: { cardCode: studentCardCode },
+          update: {
+            schoolId: school.id,
+            holderType: 'STUDENT',
+            studentId,
+            teacherId: null,
+            status: 'ACTIVE',
+            issuedAt: new Date('2026-08-01T08:00:00.000Z'),
+            deactivatedAt: null,
+            notes: null,
+          },
+          create: {
+            id: deterministicId(school.id, studentId, 'card-credential'),
+            schoolId: school.id,
+            cardCode: studentCardCode,
+            holderType: 'STUDENT',
+            studentId,
+            status: 'ACTIVE',
+            issuedAt: new Date('2026-08-01T08:00:00.000Z'),
+            deactivatedAt: null,
+            notes: null,
+          },
+        })
       }
+
+      const sessionId = deterministicId(school.id, classroom.id, 'attendance-session', '2026-09-01')
+      const classroomDeviceId = deterministicId(school.id, classroom.id, 'class-room-device')
+      const classroomNumber = classroomCodes.indexOf(classroom.classroomCode) + 1
+
+      await prisma.classroomAttendanceSession.upsert({
+        where: { id: sessionId },
+        update: {
+          academicYearId: academicYear.id,
+          classroomDeviceId,
+          teacherId: null,
+          sessionDate: new Date('2026-09-01T00:00:00.000Z'),
+          status: 'OPEN',
+          openedAt: new Date('2026-09-01T07:15:00.000Z'),
+          closedAt: null,
+        },
+        create: {
+          id: sessionId,
+          schoolId: school.id,
+          academicYearId: academicYear.id,
+          classroomId: classroom.id,
+          classroomDeviceId,
+          teacherId: null,
+          sessionDate: new Date('2026-09-01T00:00:00.000Z'),
+          status: 'OPEN',
+          openedAt: new Date('2026-09-01T07:15:00.000Z'),
+          closedAt: null,
+        },
+      })
+
+      const classroomStudents = await prisma.student.findMany({
+        where: { schoolId: school.id, classroomId: classroom.id, status: 'ACTIVE' },
+        orderBy: { studentNumber: 'asc' },
+        select: { id: true },
+      })
+
+      await prisma.studentAttendanceRecord.createMany({
+        data: classroomStudents.map((student, index) => {
+          const absent = index % 13 === 0
+          const late = !absent && index % 11 === 0
+          const present = !absent
+          return {
+            id: deterministicId(school.id, sessionId, student.id, 'attendance-record'),
+            schoolId: school.id,
+            attendanceSessionId: sessionId,
+            classroomId: classroom.id,
+            studentId: student.id,
+            status: absent ? 'ABSENT' : late ? 'LATE' : 'PRESENT',
+            firstEntryAt: present
+              ? new Date(`2026-09-01T07:${String(18 + ((index + classroomNumber) % 25)).padStart(2, '0')}:00.000Z`)
+              : null,
+            lastExitAt: null,
+            scanCount: present ? 1 : 0,
+          }
+        }),
+        skipDuplicates: true,
+      })
     }
   }
 }

@@ -79,6 +79,52 @@ enum ConnectionStatus {
   UNKNOWN
 }
 
+enum CardHolderType {
+  STUDENT
+  TEACHER
+}
+
+enum CardCredentialStatus {
+  ACTIVE
+  INACTIVE
+  LOST
+  REVOKED
+}
+
+enum RFIDActorType {
+  STUDENT
+  TEACHER
+  UNKNOWN
+}
+
+enum RFIDScanDirection {
+  ENTRY
+  EXIT
+  UNKNOWN
+}
+
+enum RFIDScanStatus {
+  ACCEPTED
+  DUPLICATE_IGNORED
+  UNKNOWN_CARD
+  INACTIVE_CARD
+  WRONG_SCHOOL
+  WRONG_CLASSROOM
+  NO_ACTIVE_SESSION
+}
+
+enum AttendanceSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum StudentAttendanceStatus {
+  ABSENT
+  PRESENT
+  LATE
+  EXCUSED
+}
+
 model SuperAdmin {
   id                           String                      @id @default(cuid())
   email                        String                      @unique
@@ -128,6 +174,10 @@ model School {
   teachers           Teacher[]
   students           Student[]
   classroomDevices   ClassroomDevice[]
+  cardCredentials    CardCredential[]
+  rfidScanEvents     RFIDScanEvent[]
+  attendanceSessions ClassroomAttendanceSession[]
+  attendanceRecords  StudentAttendanceRecord[]
 
   @@index([status])
   @@index([subscriptionStatus])
@@ -163,8 +213,10 @@ model AcademicYear {
   school     School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   levels     SchoolLevel[]
   classrooms Classroom[]
+  attendanceSessions ClassroomAttendanceSession[]
 
   @@unique([schoolId, name])
+  @@unique([id, schoolId])
   @@index([schoolId])
   @@index([schoolId, isActive])
   @@map("academic_years")
@@ -205,6 +257,9 @@ model Classroom {
   level          SchoolLevel  @relation(fields: [levelId], references: [id], onDelete: Restrict)
   students       Student[]
   classroomDevices ClassroomDevice[]
+  rfidScanEvents RFIDScanEvent[]
+  attendanceSessions ClassroomAttendanceSession[]
+  attendanceRecords StudentAttendanceRecord[]
 
   @@unique([schoolId, academicYearId, classroomCode])
   @@unique([id, schoolId])
@@ -239,7 +294,10 @@ model ClassroomDevice {
   updatedAt             DateTime              @updatedAt @map("updated_at")
   school                School                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   classroom             Classroom             @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  rfidScanEvents        RFIDScanEvent[]
+  attendanceSessions    ClassroomAttendanceSession[]
 
+  @@unique([id, schoolId])
   @@index([schoolId])
   @@index([classroomId])
   @@index([schoolId, status])
@@ -264,8 +322,12 @@ model Teacher {
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   school          School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  cardCredentials CardCredential[]
+  rfidScanEvents  RFIDScanEvent[]
+  attendanceSessions ClassroomAttendanceSession[]
 
   @@unique([schoolId, employeeNumber])
+  @@unique([id, schoolId])
   @@unique([schoolId, nationalId])
   @@unique([schoolId, email])
   @@index([schoolId])
@@ -295,8 +357,12 @@ model Student {
   updatedAt       DateTime      @updatedAt @map("updated_at")
   school          School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   classroom       Classroom     @relation(fields: [classroomId], references: [id], onDelete: Restrict)
+  cardCredentials CardCredential[]
+  rfidScanEvents  RFIDScanEvent[]
+  attendanceRecords StudentAttendanceRecord[]
 
   @@unique([schoolId, studentNumber])
+  @@unique([id, schoolId])
   @@unique([schoolId, nationalId])
   @@index([schoolId])
   @@index([classroomId])
@@ -305,6 +371,123 @@ model Student {
   @@index([fullNameAr])
   @@index([fullNameEn])
   @@map("students")
+}
+
+model CardCredential {
+  id            String                 @id @default(cuid())
+  schoolId      String                 @map("school_id")
+  cardCode      String                 @unique @map("card_code")
+  holderType    CardHolderType         @map("holder_type")
+  studentId     String?                @map("student_id")
+  teacherId     String?                @map("teacher_id")
+  status        CardCredentialStatus   @default(ACTIVE)
+  issuedAt      DateTime               @default(now()) @map("issued_at")
+  deactivatedAt DateTime?              @map("deactivated_at")
+  notes         String?
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+  school        School                 @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  student       Student?               @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  teacher       Teacher?               @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  scanEvents    RFIDScanEvent[]
+
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@index([studentId])
+  @@index([teacherId])
+  @@map("card_credentials")
+}
+
+model RFIDScanEvent {
+  id                   String            @id @default(cuid())
+  schoolId             String            @map("school_id")
+  classroomDeviceId    String            @map("classroom_device_id")
+  classroomId          String            @map("classroom_id")
+  cardCredentialId     String?           @map("card_credential_id")
+  cardCode             String            @map("card_code")
+  actorType            RFIDActorType      @default(UNKNOWN) @map("actor_type")
+  studentId            String?           @map("student_id")
+  teacherId            String?           @map("teacher_id")
+  scanDirection        RFIDScanDirection  @default(UNKNOWN) @map("scan_direction")
+  scanStatus           RFIDScanStatus     @map("scan_status")
+  scannedAt            DateTime           @map("scanned_at")
+  receivedAt           DateTime           @default(now()) @map("received_at")
+  sourceEventId        String?            @map("source_event_id")
+  duplicateOfEventId   String?            @map("duplicate_of_event_id")
+  notes                String?
+  createdAt            DateTime           @default(now()) @map("created_at")
+  school               School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classroomDevice      ClassroomDevice    @relation(fields: [classroomDeviceId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  classroom            Classroom          @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  cardCredential       CardCredential?    @relation(fields: [cardCredentialId], references: [id], onDelete: SetNull)
+  student              Student?           @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  teacher              Teacher?           @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  duplicateOfEvent     RFIDScanEvent?     @relation("RFIDScanEventDuplicates", fields: [duplicateOfEventId], references: [id], onDelete: SetNull)
+  duplicateEvents      RFIDScanEvent[]    @relation("RFIDScanEventDuplicates")
+
+  @@index([schoolId])
+  @@index([classroomDeviceId])
+  @@index([classroomId])
+  @@index([cardCode])
+  @@index([scanStatus])
+  @@index([scannedAt])
+  @@index([sourceEventId])
+  @@map("rfid_scan_events")
+}
+
+model ClassroomAttendanceSession {
+  id                String                  @id @default(cuid())
+  schoolId          String                  @map("school_id")
+  academicYearId    String                  @map("academic_year_id")
+  classroomId       String                  @map("classroom_id")
+  classroomDeviceId String                  @map("classroom_device_id")
+  teacherId         String?                 @map("teacher_id")
+  sessionDate       DateTime                @map("session_date") @db.Date
+  status            AttendanceSessionStatus @default(OPEN)
+  openedAt          DateTime                @default(now()) @map("opened_at")
+  closedAt          DateTime?               @map("closed_at")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+  school            School                  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYear      AcademicYear            @relation(fields: [academicYearId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  classroom         Classroom               @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  classroomDevice   ClassroomDevice         @relation(fields: [classroomDeviceId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  teacher           Teacher?                @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  records           StudentAttendanceRecord[]
+
+  @@unique([id, schoolId])
+  @@index([schoolId])
+  @@index([academicYearId])
+  @@index([classroomId])
+  @@index([classroomDeviceId])
+  @@index([schoolId, status])
+  @@index([sessionDate])
+  @@map("classroom_attendance_sessions")
+}
+
+model StudentAttendanceRecord {
+  id                  String                  @id @default(cuid())
+  schoolId            String                  @map("school_id")
+  attendanceSessionId String                  @map("attendance_session_id")
+  classroomId         String                  @map("classroom_id")
+  studentId           String                  @map("student_id")
+  status              StudentAttendanceStatus @default(ABSENT)
+  firstEntryAt        DateTime?               @map("first_entry_at")
+  lastExitAt          DateTime?               @map("last_exit_at")
+  scanCount           Int                     @default(0) @map("scan_count")
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+  school              School                  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  attendanceSession   ClassroomAttendanceSession @relation(fields: [attendanceSessionId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  classroom           Classroom               @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  student             Student                 @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+
+  @@unique([attendanceSessionId, studentId])
+  @@index([schoolId])
+  @@index([classroomId])
+  @@index([studentId])
+  @@index([schoolId, status])
+  @@map("student_attendance_records")
 }
 
 model SchoolSettings {
