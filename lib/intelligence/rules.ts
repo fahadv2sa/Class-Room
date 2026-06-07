@@ -391,11 +391,15 @@ async function runDeviceRules(schoolId: string) {
 export async function runOperationalIntelligenceRules(auth: AuthContext, requestedSchoolId?: string | null) {
   const schoolIds = await targetSchoolIds(auth, requestedSchoolId)
   for (const schoolId of schoolIds) {
-    await runAttendanceRules(schoolId)
-    await runMovementRules(schoolId)
-    await runNoiseRules(schoolId)
-    await runDeviceRules(schoolId)
+    await runOperationalIntelligenceForSchool(schoolId)
   }
+}
+
+export async function runOperationalIntelligenceForSchool(schoolId: string) {
+  await runAttendanceRules(schoolId)
+  await runMovementRules(schoolId)
+  await runNoiseRules(schoolId)
+  await runDeviceRules(schoolId)
 }
 
 export function alertWhereFromUrl(url: URL, auth: AuthContext): Prisma.AlertWhereInput {

@@ -8,6 +8,7 @@ import {
   normalizeAttendanceSessionStatus,
 } from '@/lib/attendance/api'
 import { ensureAttendanceRecords, sessionDate } from '@/lib/attendance/rfid'
+import { runOperationalIntelligenceForSchool } from '@/lib/intelligence/rules'
 import { paginationMeta, parsePagination } from '@/lib/people/api'
 import { prisma } from '@/lib/prisma'
 
@@ -103,6 +104,7 @@ export async function POST(request: Request) {
     })
 
     await ensureAttendanceRecords(session.id, schoolId, classroomId)
+    await runOperationalIntelligenceForSchool(schoolId)
 
     return Response.json({ session }, { status: 201 })
   } catch (error) {

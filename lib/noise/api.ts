@@ -1,6 +1,7 @@
 import { Prisma, type NoiseEventStatus, type NoiseSeverity, type NoiseState } from '@prisma/client'
 import type { AuthContext } from '@/lib/auth/session'
 import { assertSameSchool } from '@/lib/academic/access'
+import { runOperationalIntelligenceForSchool } from '@/lib/intelligence/rules'
 import { prisma } from '@/lib/prisma'
 
 const FOUNDATION_SCORE_VERSION = 1
@@ -232,6 +233,7 @@ async function closeNoiseEvent(eventId: string, schoolId: string, measuredAt: Da
 
   await recalculateClassroomSummary(closed.schoolId, closed.classroomId, closed.startedAt)
   if (closed.teacherId) await recalculateTeacherSummary(closed.schoolId, closed.teacherId, closed.startedAt)
+  await runOperationalIntelligenceForSchool(closed.schoolId)
   return closed
 }
 
@@ -325,6 +327,8 @@ export async function processNoiseReading({
       include: noiseEventInclude,
     })
 
+    await runOperationalIntelligenceForSchool(device.schoolId)
+
     const state = await prisma.classroomNoiseState.upsert({
       where: {
         schoolId_classroomId: {
@@ -371,6 +375,8 @@ export async function processNoiseReading({
       },
       include: noiseEventInclude,
     })
+
+    await runOperationalIntelligenceForSchool(device.schoolId)
 
     const state = await prisma.classroomNoiseState.upsert({
       where: {

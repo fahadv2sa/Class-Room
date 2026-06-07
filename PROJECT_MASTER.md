@@ -6,7 +6,7 @@ Audience: future AI tools, developers, auditors, project managers, investors, an
 
 Last verified from repository state through:
 
-- Phase 2H Operational Intelligence Foundation
+- Phase 2H.1 Event-Triggered Intelligence Correction
 
 This document describes verified repository facts only. It does not describe planned features as completed.
 
@@ -66,6 +66,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2G Live Noise Monitoring, Classroom Averages & Teacher-Linked Noise Scoring Foundation
 - Phase 2G.1 Scoring & Summary Architecture Correction
 - Phase 2H Operational Intelligence Foundation
+- Phase 2H.1 Event-Triggered Intelligence Correction
 
 ### In Progress
 
@@ -680,6 +681,47 @@ Database changes:
 - `SchoolSettings.movement_threshold`
 - `SchoolSettings.noise_event_threshold`
 - `SchoolSettings.device_offline_threshold`
+
+### Phase 2H.1: Event-Triggered Intelligence Correction
+
+Objective:
+
+Correct Phase 2H from lazy API-read generation to event-triggered operational intelligence while preserving existing Alert and Insight models, APIs, UI, and source-of-truth engines.
+
+Implemented:
+
+- Removed operational rule execution from `GET /api/alerts`.
+- Removed operational rule execution from `GET /api/insights`.
+- Added school-scoped rule execution after relevant operational write flows.
+- Kept alerts and insights as stored database records.
+- Preserved idempotent `source_key` upsert behavior.
+
+Major architectural decisions:
+
+- Alert and insight GET routes are read-only.
+- Operational intelligence generation happens from event flows, not from page/API reads.
+- Lazy generation from `GET /api/alerts` and `GET /api/insights` is rejected.
+- Background jobs, queues, cron scheduling, notification delivery, email, SMS, WhatsApp, reporting, AI, and ML remain future work and were not implemented.
+- Source-of-truth models and engines were not redesigned.
+
+Event-triggered integration points:
+
+- RFID/student attendance processing after accepted student scans update attendance, presence, and movement.
+- Attendance session creation after initial ABSENT records are created.
+- Noise processing after noise events are created, updated, or closed.
+- Classroom device updates when device status or connection status changes.
+
+APIs added:
+
+- No API was added in Phase 2H.1.
+
+Database entities added:
+
+- No database entity was added in Phase 2H.1.
+
+Database changes:
+
+- No database schema change was made in Phase 2H.1.
 
 Not implemented:
 
@@ -1481,7 +1523,7 @@ Permission terms:
 
 | Method | Route | Purpose | Permissions |
 |---|---|---|---|
-| GET | `/api/alerts` | Run deterministic operational rules and list alerts with pagination and filters | Tenant scoped |
+| GET | `/api/alerts` | Read stored alerts with pagination and filters | Tenant scoped |
 | GET | `/api/alerts/[alertId]` | Get one alert | Tenant scoped |
 | PATCH | `/api/alerts/[alertId]` | Update alert status | Tenant scoped |
 
@@ -1489,7 +1531,7 @@ Permission terms:
 
 | Method | Route | Purpose | Permissions |
 |---|---|---|---|
-| GET | `/api/insights` | Run deterministic operational rules and list insights with pagination and filters | Tenant scoped |
+| GET | `/api/insights` | Read stored insights with pagination and filters | Tenant scoped |
 | GET | `/api/insights/[insightId]` | Get one insight | Tenant scoped |
 | PATCH | `/api/insights/[insightId]` | Update insight status | Tenant scoped |
 

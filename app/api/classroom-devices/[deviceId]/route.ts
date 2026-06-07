@@ -9,6 +9,7 @@ import {
   normalizeConnectionStatus,
   normalizeDeviceStatus,
 } from '@/lib/devices/api'
+import { runOperationalIntelligenceForSchool } from '@/lib/intelligence/rules'
 import { nullableText, textOrUndefined } from '@/lib/people/api'
 
 const includeDeviceRelations = {
@@ -79,6 +80,7 @@ export async function PATCH(
     }
 
     const nextStatus = normalizeDeviceStatus(body?.status) ?? existing.status
+    const nextConnectionStatus = normalizeConnectionStatus(body?.connectionStatus ?? body?.connection_status) ?? existing.connectionStatus
     if (nextStatus === 'ACTIVE') await assertNoOtherActiveDevice(nextClassroomId, existing.id)
 
     const device = await prisma.classroomDevice.update({
@@ -109,6 +111,10 @@ export async function PATCH(
       },
       include: includeDeviceRelations,
     })
+
+    if (nextStatus !== existing.status || nextConnectionStatus !== existing.connectionStatus) {
+      await runOperationalIntelligenceForSchool(existing.schoolId)
+    }
 
     return Response.json({ device })
   } catch (error) {

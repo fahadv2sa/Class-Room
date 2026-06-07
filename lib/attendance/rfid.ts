@@ -7,6 +7,7 @@ import type {
   StudentAttendanceStatus,
 } from '@prisma/client'
 import { assertSameSchool } from '@/lib/academic/access'
+import { runOperationalIntelligenceForSchool } from '@/lib/intelligence/rules'
 import { prisma } from '@/lib/prisma'
 
 const DUPLICATE_WINDOW_MS = 10_000
@@ -661,6 +662,8 @@ export async function processRFIDScan(input: ProcessRFIDScanInput) {
       scanDirection,
       scannedAt,
     })
+
+    await runOperationalIntelligenceForSchool(device.schoolId)
 
     return { event, scanStatus, duplicate: false, attendanceSession, attendanceRecord }
   }
