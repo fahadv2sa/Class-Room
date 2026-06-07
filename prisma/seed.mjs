@@ -124,7 +124,11 @@ async function main() {
 
   await prisma.superAdmin.upsert({
     where: { email: 'super@classpulse.ai' },
-    update: {},
+    update: {
+      passwordHash,
+      fullName: 'ClassPulse Platform Owner',
+      isActive: true,
+    },
     create: {
       email: 'super@classpulse.ai',
       passwordHash,
@@ -207,6 +211,7 @@ async function main() {
       where: { email: data.adminEmail },
       update: {
         schoolId: school.id,
+        passwordHash,
         fullName: data.adminName,
         isActive: true,
       },
