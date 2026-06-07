@@ -6,7 +6,7 @@ Audience: future AI tools, developers, auditors, project managers, investors, an
 
 Last verified from repository state through:
 
-- Phase 2H.1 Event-Triggered Intelligence Correction
+- Phase 2H.2 Alert & Insight Configuration
 
 This document describes verified repository facts only. It does not describe planned features as completed.
 
@@ -67,6 +67,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2G.1 Scoring & Summary Architecture Correction
 - Phase 2H Operational Intelligence Foundation
 - Phase 2H.1 Event-Triggered Intelligence Correction
+- Phase 2H.2 Alert & Insight Configuration
 
 ### In Progress
 
@@ -723,6 +724,60 @@ Database changes:
 
 - No database schema change was made in Phase 2H.1.
 
+### Phase 2H.2: Alert & Insight Configuration
+
+Objective:
+
+Allow each school to control which operational alert and insight types are active and visible in dashboards without disabling detection or deleting history.
+
+Implemented:
+
+- School-scoped enabled alert type configuration on `SchoolSettings`.
+- School-scoped enabled insight type configuration on `SchoolSettings`.
+- Settings API loading and saving for enabled alert and insight types.
+- Settings page controls for operational intelligence visibility.
+- Default alert and insight list visibility filtering for SchoolAdmin users.
+
+Major architectural decisions:
+
+- Detection is always active.
+- Visibility is configurable.
+- Disabling a type does not stop rule execution.
+- Disabling a type does not stop detection.
+- Disabling a type does not delete existing alerts or insights.
+- Existing alert and insight history remains stored.
+- Re-enabling a type restores visibility because records were preserved.
+- SuperAdmin visibility remains available.
+- No separate configuration system was created; configuration remains part of `SchoolSettings`.
+
+Configured alert types:
+
+- `STUDENT_LATE`
+- `STUDENT_ABSENT`
+- `EXCESSIVE_STUDENT_EXITS`
+- `HIGH_NOISE_EVENT`
+- `DEVICE_OFFLINE`
+
+Configured insight types:
+
+- `RECURRING_STUDENT_LATENESS`
+- `EXCESSIVE_STUDENT_MOVEMENT`
+- `CHRONIC_CLASSROOM_NOISE`
+- `DEVICE_RELIABILITY_ISSUE`
+
+APIs added:
+
+- No API was added in Phase 2H.2.
+
+Database entities added:
+
+- No database entity was added in Phase 2H.2.
+
+Database changes:
+
+- `SchoolSettings.enabled_alert_types`
+- `SchoolSettings.enabled_insight_types`
+
 Not implemented:
 
 - Weekly summary generation.
@@ -1004,6 +1059,10 @@ Important constraints:
   - `movement_threshold`
   - `noise_event_threshold`
   - `device_offline_threshold`
+- Stores Phase 2H.2 visibility configuration:
+  - `enabled_alert_types`
+  - `enabled_insight_types`
+- These visibility settings do not disable detection or rule execution.
 
 ### AcademicYear
 
@@ -1956,6 +2015,8 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2G Live Noise Monitoring, Classroom Averages & Teacher-Linked Noise Scoring Foundation
 - Phase 2G.1 Scoring & Summary Architecture Correction
 - Phase 2H Operational Intelligence Foundation
+- Phase 2H.1 Event-Triggered Intelligence Correction
+- Phase 2H.2 Alert & Insight Configuration
 
 ### Next
 

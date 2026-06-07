@@ -941,6 +941,8 @@ model SchoolSettings {
   dailyReportEnabled      Boolean  @default(false) @map("daily_report_enabled")
   schoolNameOverride      String?  @map("school_name_override")
   contactPhone            String?  @map("contact_phone")
+  enabledAlertTypes       String[] @default(["STUDENT_LATE", "STUDENT_ABSENT", "EXCESSIVE_STUDENT_EXITS", "HIGH_NOISE_EVENT", "DEVICE_OFFLINE"]) @map("enabled_alert_types")
+  enabledInsightTypes     String[] @default(["RECURRING_STUDENT_LATENESS", "EXCESSIVE_STUDENT_MOVEMENT", "CHRONIC_CLASSROOM_NOISE", "DEVICE_RELIABILITY_ISSUE"]) @map("enabled_insight_types")
   updatedAt               DateTime @updatedAt @map("updated_at")
   school                  School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 

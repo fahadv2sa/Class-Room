@@ -119,7 +119,6 @@ async function upsertInsight(input: InsightInput) {
 
 async function runAttendanceRules(schoolId: string) {
   const settings = await getSettings(schoolId)
-  if (!settings.attendanceAlertsEnabled) return
 
   const since = lookbackDate()
   const records = await prisma.studentAttendanceRecord.findMany({
@@ -196,7 +195,6 @@ async function runAttendanceRules(schoolId: string) {
 
 async function runMovementRules(schoolId: string) {
   const settings = await getSettings(schoolId)
-  if (!settings.movementAlertsEnabled) return
 
   const since = lookbackDate()
   const sessionGroups = await prisma.studentMovementRecord.groupBy({
@@ -274,7 +272,6 @@ async function runMovementRules(schoolId: string) {
 
 async function runNoiseRules(schoolId: string) {
   const settings = await getSettings(schoolId)
-  if (!settings.noiseAlertsEnabled) return
 
   const since = lookbackDate()
   const events = await prisma.noiseEvent.findMany({
@@ -343,7 +340,6 @@ async function runNoiseRules(schoolId: string) {
 
 async function runDeviceRules(schoolId: string) {
   const settings = await getSettings(schoolId)
-  if (!settings.deviceAlertsEnabled) return
 
   const devices = await prisma.classroomDevice.findMany({
     where: {

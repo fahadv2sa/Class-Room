@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import {
   clampNumber,
   defaultSchoolSettings,
+  normalizeAlertTypes,
+  normalizeInsightTypes,
   normalizeLanguage,
   optionalBoolean,
 } from '@/lib/settings/defaults'
@@ -68,6 +70,8 @@ export async function PATCH(request: Request) {
     const movementThreshold = clampNumber(body?.movementThreshold ?? body?.movement_threshold, 1, 50)
     const noiseEventThreshold = clampNumber(body?.noiseEventThreshold ?? body?.noise_event_threshold, 1, 100)
     const deviceOfflineThreshold = clampNumber(body?.deviceOfflineThreshold ?? body?.device_offline_threshold, 1, 30)
+    const enabledAlertTypes = normalizeAlertTypes(body?.enabledAlertTypes ?? body?.enabled_alert_types)
+    const enabledInsightTypes = normalizeInsightTypes(body?.enabledInsightTypes ?? body?.enabled_insight_types)
 
     const settings = await prisma.schoolSettings.update({
       where: { schoolId },
@@ -81,6 +85,8 @@ export async function PATCH(request: Request) {
         movementThreshold,
         noiseEventThreshold,
         deviceOfflineThreshold,
+        enabledAlertTypes,
+        enabledInsightTypes,
         noiseAlertsEnabled: optionalBoolean(body?.noiseAlertsEnabled ?? body?.noise_alerts_enabled),
         movementAlertsEnabled: optionalBoolean(body?.movementAlertsEnabled ?? body?.movement_alerts_enabled),
         attendanceAlertsEnabled: optionalBoolean(body?.attendanceAlertsEnabled ?? body?.attendance_alerts_enabled),

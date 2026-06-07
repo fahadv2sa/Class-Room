@@ -19,7 +19,26 @@ import {
   ShieldCheck,
   Volume2,
   Save,
+  Activity,
 } from 'lucide-react'
+
+const alertTypes = [
+  'STUDENT_LATE',
+  'STUDENT_ABSENT',
+  'EXCESSIVE_STUDENT_EXITS',
+  'HIGH_NOISE_EVENT',
+  'DEVICE_OFFLINE',
+] as const
+
+const insightTypes = [
+  'RECURRING_STUDENT_LATENESS',
+  'EXCESSIVE_STUDENT_MOVEMENT',
+  'CHRONIC_CLASSROOM_NOISE',
+  'DEVICE_RELIABILITY_ISSUE',
+] as const
+
+type AlertTypeKey = (typeof alertTypes)[number]
+type InsightTypeKey = (typeof insightTypes)[number]
 
 type SettingsState = {
   language: 'AR' | 'EN'
@@ -33,6 +52,8 @@ type SettingsState = {
   dailyReportEnabled: boolean
   schoolNameOverride: string
   contactPhone: string
+  enabledAlertTypes: AlertTypeKey[]
+  enabledInsightTypes: InsightTypeKey[]
 }
 
 const defaultSettings: SettingsState = {
@@ -47,6 +68,8 @@ const defaultSettings: SettingsState = {
   dailyReportEnabled: false,
   schoolNameOverride: '',
   contactPhone: '0112345678',
+  enabledAlertTypes: [...alertTypes],
+  enabledInsightTypes: [...insightTypes],
 }
 
 const levelLabelKey: Record<Level, string> = {
@@ -183,6 +206,8 @@ export default function SettingsPage() {
           dailyReportEnabled: loaded.dailyReportEnabled,
           schoolNameOverride: loaded.schoolNameOverride ?? '',
           contactPhone: loaded.contactPhone ?? '',
+          enabledAlertTypes: normalizeArray(loaded.enabledAlertTypes, alertTypes),
+          enabledInsightTypes: normalizeArray(loaded.enabledInsightTypes, insightTypes),
         })
         setLanguage(loaded.language === 'EN' ? 'EN' : 'AR')
 
@@ -229,6 +254,8 @@ export default function SettingsPage() {
           dailyReportEnabled: settings.dailyReportEnabled,
           schoolNameOverride: settings.schoolNameOverride,
           contactPhone: settings.contactPhone,
+          enabledAlertTypes: settings.enabledAlertTypes,
+          enabledInsightTypes: settings.enabledInsightTypes,
         }),
       })
 
@@ -247,6 +274,24 @@ export default function SettingsPage() {
 
   const title = t('settings.title')
   const subtitle = `${t('settings.subtitle')}${level ? ` · ${t(levelLabelKey[level])}` : ''}`
+
+  function updateAlertType(type: AlertTypeKey, enabled: boolean) {
+    update(
+      'enabledAlertTypes',
+      enabled
+        ? Array.from(new Set([...settings.enabledAlertTypes, type]))
+        : settings.enabledAlertTypes.filter((item) => item !== type),
+    )
+  }
+
+  function updateInsightType(type: InsightTypeKey, enabled: boolean) {
+    update(
+      'enabledInsightTypes',
+      enabled
+        ? Array.from(new Set([...settings.enabledInsightTypes, type]))
+        : settings.enabledInsightTypes.filter((item) => item !== type),
+    )
+  }
 
   return (
     <DashboardShell title={title} subtitle={subtitle}>
@@ -422,6 +467,43 @@ export default function SettingsPage() {
               </div>
             </div>
           </SectionCard>
+
+          <SectionCard
+            icon={Activity}
+            title={t('settings.operationalIntelligence')}
+            desc={t('settings.operationalIntelligenceDesc')}
+          >
+            <div className="space-y-5">
+              <div>
+                <p className="text-sm font-bold">{t('settings.alertVisibility')}</p>
+                <div className="mt-2">
+                  {alertTypes.map((type) => (
+                    <ToggleRow
+                      key={type}
+                      title={t(`settings.alertType.${type}`)}
+                      desc={t('settings.visibilityOnly')}
+                      value={settings.enabledAlertTypes.includes(type)}
+                      onChange={(value) => updateAlertType(type, value)}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-bold">{t('settings.insightVisibility')}</p>
+                <div className="mt-2">
+                  {insightTypes.map((type) => (
+                    <ToggleRow
+                      key={type}
+                      title={t(`settings.insightType.${type}`)}
+                      desc={t('settings.visibilityOnly')}
+                      value={settings.enabledInsightTypes.includes(type)}
+                      onChange={(value) => updateInsightType(type, value)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </SectionCard>
         </div>
 
         {(message || error) && (
@@ -448,4 +530,10 @@ export default function SettingsPage() {
       </div>
     </DashboardShell>
   )
+}
+
+function normalizeArray<T extends string>(value: unknown, allowed: readonly T[]) {
+  if (!Array.isArray(value)) return [...allowed]
+  const normalized = value.map((item) => String(item ?? '').trim().toUpperCase())
+  return normalized.filter((item): item is T => allowed.includes(item as T))
 }
