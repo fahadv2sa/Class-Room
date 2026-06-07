@@ -1,6 +1,6 @@
 'use client'
 
-import { noiseStatus, noiseStatusMeta } from '@/lib/mock-data'
+import { noiseStatus, noiseStatusMeta } from '@/lib/levels'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/components/language-provider'
 import { noiseStatusKey } from '@/lib/i18n/ui'

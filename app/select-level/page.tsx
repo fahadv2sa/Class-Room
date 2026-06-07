@@ -1,8 +1,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { levels, type Level, getKpis } from '@/lib/mock-data'
+import { useEffect, useState } from 'react'
+import { levels, type Level, levelMap, levelType } from '@/lib/levels'
 import { useLevel } from '@/components/level-provider'
 import { useLanguage } from '@/components/language-provider'
 import { Sparkles, GraduationCap, BookOpen, Microscope, ArrowLeft, Building2 } from 'lucide-react'
@@ -24,6 +24,52 @@ export default function SelectLevelPage() {
   const { setLevel, district, school } = useLevel()
   const { t } = useLanguage()
   const [active, setActive] = useState<Level | null>(null)
+  const [counts, setCounts] = useState<Record<Level, { totalClasses: number; totalStudents: number }>>({
+    primary: { totalClasses: 0, totalStudents: 0 },
+    middle: { totalClasses: 0, totalStudents: 0 },
+    high: { totalClasses: 0, totalStudents: 0 },
+  })
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadCounts() {
+      const studentRequests = levels.map((level) =>
+        fetch(`/api/students?level=${levelType(level.id)}&pageSize=1`, { cache: 'no-store' }),
+      )
+      const [classroomResponse, ...studentResponses] = await Promise.all([
+        fetch('/api/classrooms', { cache: 'no-store' }),
+        ...studentRequests,
+      ])
+      const classroomData = classroomResponse.ok ? await classroomResponse.json() : { classrooms: [] }
+      const studentTotals = await Promise.all(
+        studentResponses.map(async (response) => {
+          if (!response.ok) return 0
+          const data = await response.json()
+          return Number(data.meta?.total ?? 0)
+        }),
+      )
+      if (!mounted) return
+      const next = {
+        primary: { totalClasses: 0, totalStudents: 0 },
+        middle: { totalClasses: 0, totalStudents: 0 },
+        high: { totalClasses: 0, totalStudents: 0 },
+      }
+      for (const classroom of classroomData.classrooms ?? []) {
+        const level = levelFromClassroomCode(classroom.classroomCode)
+        if (level) next[level].totalClasses += 1
+      }
+      levels.forEach((level, index) => {
+        next[level.id].totalStudents = studentTotals[index] ?? 0
+      })
+      setCounts(next)
+    }
+
+    loadCounts().catch(() => undefined)
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   function choose(l: Level) {
     setActive(l)
@@ -66,7 +112,7 @@ export default function SelectLevelPage() {
       <div className="relative grid w-full max-w-4xl gap-5 md:grid-cols-3">
         {levels.map((lvl) => {
           const Icon = levelIcon[lvl.id]
-          const kpis = getKpis(lvl.id)
+          const kpis = counts[lvl.id]
           const isActive = active === lvl.id
           return (
             <button
@@ -111,6 +157,11 @@ export default function SelectLevelPage() {
       </p>
     </div>
   )
+}
+
+function levelFromClassroomCode(code: unknown): Level | null {
+  const prefix = String(code ?? '').charAt(0).toUpperCase()
+  return Object.values(levelMap).find((level) => level.code === prefix)?.id ?? null
 }
 
 function Stat({ label, value }: { label: string; value: number }) {

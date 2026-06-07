@@ -19,8 +19,8 @@ export default function LoginPage() {
   const router = useRouter()
   const { refreshLanguage, t } = useLanguage()
   const [show, setShow] = useState(false)
-  const [email, setEmail] = useState('admin@jubail-school.edu.sa')
-  const [password, setPassword] = useState('Password123!')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 

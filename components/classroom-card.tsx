@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { NoiseDot } from '@/components/noise-meter'
-import { noiseStatus, noiseStatusMeta, type Classroom } from '@/lib/mock-data'
+import { noiseStatus, noiseStatusMeta } from '@/lib/levels'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/components/language-provider'
 import {
@@ -17,7 +17,20 @@ import {
   ChevronLeft,
 } from 'lucide-react'
 
-export function ClassroomCard({ c }: { c: Classroom }) {
+export type ClassroomCardData = {
+  id: string
+  name: string
+  subject: string
+  teacher: string
+  noise: number
+  present: number
+  absent: number
+  outside: number
+  deviceStatus: 'online' | 'offline'
+  lastUpdate: string
+}
+
+export function ClassroomCard({ c }: { c: ClassroomCardData }) {
   const meta = noiseStatusMeta[noiseStatus(c.noise)]
   const { t } = useLanguage()
   return (

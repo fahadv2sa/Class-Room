@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
-import { ClassroomCard } from '@/components/classroom-card'
+import { ClassroomCard, type ClassroomCardData } from '@/components/classroom-card'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -11,10 +11,35 @@ import { Segmented } from '@/components/ui/segmented'
 import { Table, THead, TR, TH, TD } from '@/components/ui/table'
 import { NoiseDot } from '@/components/noise-meter'
 import { useLevel } from '@/components/level-provider'
-import { getClassrooms, levelMap, noiseStatus } from '@/lib/mock-data'
+import { levelMap, levelType, noiseStatus } from '@/lib/levels'
 import { Search, List, Wifi, WifiOff } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { classroomCount, noiseStatusKey } from '@/lib/i18n/ui'
+
+type ClassroomRow = ClassroomCardData & {
+  grade: number
+  adminLabel: string
+  totalStudents: number
+}
+
+type PresenceClassroom = {
+  classroomId: string
+  classroomCode: string
+  classroomName: string
+  totalStudents: number
+  presentStudents: number
+  absentStudents: number
+  lateStudents: number
+  studentsOutside: number
+}
+
+type NoiseClassroom = {
+  classroomId: string
+  classroomCode: string
+  classroomName: string
+  device: { connectionStatus: 'ONLINE' | 'OFFLINE' | 'UNKNOWN' } | null
+  state: { currentDb: number; updatedAt: string | null; activeNoiseEvent?: { teacher?: { fullNameAr?: string | null; fullNameEn?: string | null } | null } | null }
+}
 
 export default function ClassroomsPage() {
   const { level } = useLevel()
@@ -22,16 +47,67 @@ export default function ClassroomsPage() {
   const [grade, setGrade] = useState<number | 'all'>('all')
   const [noise, setNoise] = useState('all')
   const [q, setQ] = useState('')
+  const [classrooms, setClassrooms] = useState<ClassroomRow[]>([])
   const { t } = useLanguage()
 
   const lvl = level ? levelMap[level] : null
-  const classrooms = useMemo(() => (level ? getClassrooms(level) : []), [level])
+
+  useEffect(() => {
+    if (!level) return
+    let active = true
+
+    async function loadClassrooms() {
+      const apiLevel = levelType(level!)
+      const [presenceResponse, noiseResponse] = await Promise.all([
+        fetch(`/api/presence/classrooms?level=${apiLevel}`, { cache: 'no-store' }),
+        fetch(`/api/noise/classrooms?level=${apiLevel}`, { cache: 'no-store' }),
+      ])
+      const [presenceData, noiseData] = await Promise.all([
+        presenceResponse.ok ? presenceResponse.json() : Promise.resolve({ classrooms: [] }),
+        noiseResponse.ok ? noiseResponse.json() : Promise.resolve({ classrooms: [] }),
+      ])
+      if (!active) return
+      const noiseByClassroom = new Map<string, NoiseClassroom>(
+        (noiseData.classrooms ?? []).map((item: NoiseClassroom) => [item.classroomId, item]),
+      )
+      setClassrooms(
+        (presenceData.classrooms ?? []).map((item: PresenceClassroom) => {
+          const noiseItem = noiseByClassroom.get(item.classroomId)
+          const teacher = noiseItem?.state?.activeNoiseEvent?.teacher
+          const code = item.classroomCode
+          return {
+            id: item.classroomId,
+            name: item.classroomName || code,
+            subject: code,
+            teacher: teacher?.fullNameEn || teacher?.fullNameAr || '-',
+            grade: Number(code.slice(1, -1)) || 0,
+            adminLabel: code,
+            totalStudents: item.totalStudents,
+            present: item.presentStudents + item.lateStudents,
+            absent: item.absentStudents,
+            outside: item.studentsOutside,
+            noise: noiseItem?.state?.currentDb ?? 0,
+            deviceStatus: noiseItem?.device?.connectionStatus === 'ONLINE' ? 'online' : 'offline',
+            lastUpdate: noiseItem?.state?.updatedAt ? new Date(noiseItem.state.updatedAt).toLocaleString() : t('devices.notSeen'),
+          }
+        }),
+      )
+    }
+
+    loadClassrooms().catch(() => {
+      if (active) setClassrooms([])
+    })
+
+    return () => {
+      active = false
+    }
+  }, [level, t])
 
   const filtered = useMemo(() => {
     return classrooms.filter((c) => {
       if (grade !== 'all' && c.grade !== grade) return false
       if (noise !== 'all' && noiseStatus(c.noise) !== noise) return false
-      if (q && !c.name.includes(q) && !c.teacher.includes(q)) return false
+      if (q && !c.name.includes(q) && !c.teacher.includes(q) && !c.adminLabel.includes(q.toUpperCase())) return false
       return true
     })
   }, [classrooms, grade, noise, q])

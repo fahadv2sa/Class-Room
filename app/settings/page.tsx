@@ -10,7 +10,7 @@ import { Segmented } from '@/components/ui/segmented'
 import { cn } from '@/lib/utils'
 import { useLevel } from '@/components/level-provider'
 import { useLanguage } from '@/components/language-provider'
-import type { Level } from '@/lib/mock-data'
+import type { Level } from '@/lib/levels'
 import {
   School,
   SlidersHorizontal,

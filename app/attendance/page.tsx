@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Table, THead, TR, TH, TD } from '@/components/ui/table'
 import { AttendanceBarChart } from '@/components/charts'
 import { useLevel } from '@/components/level-provider'
-import { levelMap } from '@/lib/mock-data'
+import { levelMap } from '@/lib/levels'
 import { useLanguage } from '@/components/language-provider'
 import { minutes, withLevel } from '@/lib/i18n/ui'
 import {

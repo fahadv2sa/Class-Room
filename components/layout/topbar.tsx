@@ -5,7 +5,7 @@ import { Menu, Search, Bell, ChevronDown, Check, Building2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 import { useLevel } from '@/components/level-provider'
-import { levels, levelMap, getAlerts } from '@/lib/mock-data'
+import { levels, levelMap } from '@/lib/levels'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/components/language-provider'
 import { levelNameKey, levelShortKey } from '@/lib/i18n/ui'
@@ -22,6 +22,7 @@ export function Topbar({
   const { level, setLevel, school } = useLevel()
   const { t } = useLanguage()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [activeAlerts, setActiveAlerts] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -32,8 +33,27 @@ export function Topbar({
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
+  useEffect(() => {
+    let active = true
+
+    async function loadAlertCount() {
+      try {
+        const response = await fetch('/api/alerts?status=OPEN&pageSize=1', { cache: 'no-store' })
+        if (!response.ok) throw new Error('Could not load alerts')
+        const data = await response.json()
+        if (active) setActiveAlerts(data.meta?.total ?? 0)
+      } catch {
+        if (active) setActiveAlerts(0)
+      }
+    }
+
+    loadAlertCount()
+    return () => {
+      active = false
+    }
+  }, [])
+
   const current = level ? levelMap[level] : null
-  const activeAlerts = level ? getAlerts(level).filter((a) => !a.resolved).length : 0
 
   return (
     <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur-xl md:px-6">

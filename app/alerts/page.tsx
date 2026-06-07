@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Segmented } from '@/components/ui/segmented'
 import { useLevel } from '@/components/level-provider'
-import { levelMap } from '@/lib/mock-data'
+import { levelMap } from '@/lib/levels'
 import { useLanguage } from '@/components/language-provider'
 import { withLevel } from '@/lib/i18n/ui'
 import {

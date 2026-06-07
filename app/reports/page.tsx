@@ -6,24 +6,21 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { StatCard } from '@/components/stat-card'
 import { useLevel } from '@/components/level-provider'
-import { getReports } from '@/lib/mock-data'
 import { FileText, Eye, FileSpreadsheet, Clock, ClipboardCheck, TrendingUp, Users, School } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { withLevel } from '@/lib/i18n/ui'
 
-const reportTitleKey: Record<string, string> = {
-  r1: 'reports.dailyAttendance',
-  r2: 'reports.weeklyAbsence',
-  r3: 'reports.studentMovement',
-  r4: 'reports.noise',
-  r5: 'reports.classPerformance',
-  r6: 'reports.teacherPerformance',
-  r7: 'reports.frequentExits',
-}
-
 type KpiRecord = {
   kpiType: string
   value: number
+}
+
+type ReportDefinition = {
+  id: string
+  name: string
+  description: string
+  updatedAt: string
+  exportDefinitions: Array<{ id: string; format: 'PDF' | 'EXCEL'; isActive: boolean }>
 }
 
 type RankingRecord = {
@@ -42,28 +39,33 @@ export default function ReportsPage() {
     topTeachers: RankingRecord[]
     studentsRequiringAttention: RankingRecord[]
   } | null>(null)
+  const [reports, setReports] = useState<ReportDefinition[]>([])
 
   useEffect(() => {
     let active = true
 
     async function loadAnalytics() {
-      const [kpiResponse, rankingResponse] = await Promise.all([
+      const [kpiResponse, rankingResponse, reportsResponse] = await Promise.all([
         fetch('/api/analytics/kpis?period=DAILY', { cache: 'no-store' }),
         fetch('/api/analytics/rankings?period=DAILY&take=3', { cache: 'no-store' }),
+        fetch('/api/reports?pageSize=20', { cache: 'no-store' }),
       ])
-      const [kpiData, rankingData] = await Promise.all([
+      const [kpiData, rankingData, reportsData] = await Promise.all([
         kpiResponse.ok ? kpiResponse.json() : Promise.resolve({ kpis: [] }),
         rankingResponse.ok ? rankingResponse.json() : Promise.resolve({ rankings: null }),
+        reportsResponse.ok ? reportsResponse.json() : Promise.resolve({ reports: [] }),
       ])
       if (!active) return
       setKpis(kpiData.kpis ?? [])
       setRankings(rankingData.rankings ?? null)
+      setReports(reportsData.reports ?? [])
     }
 
     loadAnalytics().catch(() => {
       if (!active) return
       setKpis([])
       setRankings(null)
+      setReports([])
     })
 
     return () => {
@@ -73,7 +75,6 @@ export default function ReportsPage() {
 
   if (!level) return null
 
-  const reports = getReports(level)
   const attendanceRate = findKpi(kpis, 'ATTENDANCE_RATE')
   const lateRate = findKpi(kpis, 'LATE_RATE')
   const performanceScore = findKpi(kpis, 'CLASSROOM_PERFORMANCE_SCORE')
@@ -107,15 +108,15 @@ export default function ReportsPage() {
                   <FileText className="size-5" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-extrabold tracking-tight">{t(reportTitleKey[r.id])}</h3>
+                  <h3 className="font-extrabold tracking-tight">{r.name}</h3>
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                    {r.desc}
+                    {r.description}
                   </p>
                 </div>
               </div>
 
               <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Clock className="size-3.5" /> {t('common.lastUpdatePrefix')} {r.updated}
+                <Clock className="size-3.5" /> {t('common.lastUpdatePrefix')} {new Date(r.updatedAt).toLocaleString()}
               </p>
 
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">

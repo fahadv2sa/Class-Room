@@ -12,6 +12,8 @@ const protectedRoutes = [
   '/students',
   '/reports',
   '/alerts',
+  '/ai',
+  '/communication',
   '/devices',
   '/settings',
 ]
@@ -47,6 +49,8 @@ export const config = {
     '/students/:path*',
     '/reports/:path*',
     '/alerts/:path*',
+    '/ai/:path*',
+    '/communication/:path*',
     '/devices/:path*',
     '/settings/:path*',
   ],

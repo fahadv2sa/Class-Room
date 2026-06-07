@@ -1,4 +1,4 @@
-import type { Level, NoiseStatus } from '@/lib/mock-data'
+import type { Level, NoiseStatus } from '@/lib/levels'
 
 export type TFunction = (key: string) => string
 

@@ -7,7 +7,7 @@ import {
   useState,
   useCallback,
 } from 'react'
-import { type Level, levelMap, district, school } from '@/lib/mock-data'
+import { type Level, levelMap, fallbackDistrict, fallbackSchool } from '@/lib/levels'
 
 type LevelContextValue = {
   level: Level | null
@@ -23,8 +23,8 @@ const STORAGE_KEY = 'classpulse.level'
 
 export function LevelProvider({ children }: { children: React.ReactNode }) {
   const [level, setLevelState] = useState<Level | null>(null)
-  const [schoolName, setSchoolName] = useState(school)
-  const [districtName, setDistrictName] = useState(district)
+  const [schoolName, setSchoolName] = useState(fallbackSchool)
+  const [districtName, setDistrictName] = useState(fallbackDistrict)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {

@@ -1,17 +1,13 @@
-import { notFound } from 'next/navigation'
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { NoiseMeter } from '@/components/noise-meter'
 import { NoiseAreaChart } from '@/components/charts'
-import {
-  classrooms,
-  students,
-  getEntryExitTimeline,
-  getNoiseHistory,
-  teachers,
-} from '@/lib/mock-data'
 import {
   ChevronRight,
   Wifi,
@@ -25,33 +21,141 @@ import {
   StickyNote,
 } from 'lucide-react'
 
-export function generateStaticParams() {
-  return classrooms.map((c) => ({ id: c.id }))
+type StudentInfo = {
+  id: string
+  fullNameAr: string
+  fullNameEn?: string | null
+  cardCode: string
 }
 
-export default async function ClassroomDetail({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = await params
-  const c = classrooms.find((x) => x.id === id)
-  if (!c) notFound()
+type StudentState = {
+  id: string
+  currentState: 'INSIDE_CLASSROOM' | 'OUTSIDE_CLASSROOM' | 'ABSENT'
+  enteredAt?: string | null
+  exitedAt?: string | null
+  student: StudentInfo
+}
 
-  const inside = students.filter((s) => s.classroom === c.name && s.status === 'inside')
-  const outside = students.filter((s) => s.classroom === c.name && s.status === 'outside')
-  const teacher = teachers.find((t) => t.name === c.teacher)
-  const entryExitTimeline = getEntryExitTimeline(c.code)
-  const noiseHistory = getNoiseHistory(c.code)
+type PresenceClassroom = {
+  classroomId: string
+  classroomCode: string
+  classroomName: string
+  totalStudents: number
+  presentStudents: number
+  absentStudents: number
+  lateStudents: number
+  studentsInside: number
+  studentsOutside: number
+  teacherInside: boolean
+  states: StudentState[]
+  teachersInside: { teacher: StudentInfo }[]
+}
 
-  const notes = [
-    'تم تنبيه الفصل بخصوص ارتفاع الصوت أثناء النشاط الجماعي.',
-    'الحصة الثالثة سجلت أفضل مستوى هدوء خلال اليوم.',
-    'طالبان بحاجة لمتابعة بسبب تكرار الخروج.',
-  ]
+type NoiseEvent = {
+  id: string
+  startedAt: string
+  endedAt?: string | null
+  averageDb?: number | null
+  peakDb?: number | null
+}
+
+type NoiseClassroom = {
+  classroomId: string
+  classroomCode: string
+  classroomName: string
+  device: { connectionStatus: 'ONLINE' | 'OFFLINE' | 'MAINTENANCE' } | null
+  state: { currentDb: number; updatedAt: string } | null
+}
+
+type MovementRecord = {
+  id: string
+  status: 'OPEN' | 'CLOSED'
+  exitedAt: string
+  returnedAt?: string | null
+  student: StudentInfo
+}
+
+const notes = [
+  'تظهر هذه الصفحة بيانات الفصل التشغيلية من سجلات الحضور والضوضاء الحالية.',
+  'تظل أي ملاحظات إدارية مستقبلية منفصلة عن مصدر بيانات الحضور والضوضاء.',
+  'تعتمد دقة الحالة اللحظية على آخر جلسة حضور مفتوحة لهذا الفصل.',
+]
+
+export default function ClassroomDetail() {
+  const params = useParams<{ id: string }>()
+  const classroomId = params.id
+  const [presence, setPresence] = useState<PresenceClassroom | null>(null)
+  const [noise, setNoise] = useState<NoiseClassroom | null>(null)
+  const [noiseEvents, setNoiseEvents] = useState<NoiseEvent[]>([])
+  const [movements, setMovements] = useState<MovementRecord[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+
+    async function loadClassroom() {
+      if (!classroomId) return
+      setLoading(true)
+      try {
+        const [presenceResponse, noiseResponse, movementsResponse] = await Promise.all([
+          fetch(`/api/presence/classrooms/${classroomId}`),
+          fetch(`/api/noise/classrooms/${classroomId}`),
+          fetch(`/api/movements/students?classroomId=${classroomId}&pageSize=10`),
+        ])
+
+        if (!alive) return
+
+        if (presenceResponse.ok) {
+          const data = await presenceResponse.json()
+          setPresence(data.classroom ?? null)
+        }
+
+        if (noiseResponse.ok) {
+          const data = await noiseResponse.json()
+          setNoise(data.classroom ?? null)
+          setNoiseEvents(data.events ?? [])
+        }
+
+        if (movementsResponse.ok) {
+          const data = await movementsResponse.json()
+          setMovements(data.movements ?? [])
+        }
+      } finally {
+        if (alive) setLoading(false)
+      }
+    }
+
+    loadClassroom()
+    return () => {
+      alive = false
+    }
+  }, [classroomId])
+
+  const classroom = presence ?? noise
+  const title = classroom?.classroomName || classroom?.classroomCode || 'الفصل'
+  const subtitle = classroom?.classroomCode || 'بيانات الفصل'
+  const inside = (presence?.states ?? []).filter((s) => s.currentState === 'INSIDE_CLASSROOM')
+  const outside = (presence?.states ?? []).filter((s) => s.currentState === 'OUTSIDE_CLASSROOM')
+  const teacher = presence?.teachersInside[0]?.teacher
+  const deviceOnline = noise?.device?.connectionStatus === 'ONLINE'
+  const currentNoise = noise?.state?.currentDb ?? 0
+  const noiseHistory = useMemo(
+    () =>
+      noiseEvents
+        .slice()
+        .reverse()
+        .map((event) => ({
+          time: new Date(event.startedAt).toLocaleTimeString('ar-SA', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          noise: Math.round(event.averageDb ?? event.peakDb ?? 0),
+        })),
+    [noiseEvents],
+  )
 
   return (
-    <DashboardShell title={c.name} subtitle={`${c.stage} · ${c.subject}`}>
+    <DashboardShell title={title} subtitle={subtitle}>
       <div className="space-y-6">
         <Link
           href="/classrooms"
@@ -61,42 +165,40 @@ export default async function ClassroomDetail({
         </Link>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Live noise */}
           <Card className="flex flex-col items-center justify-center gap-4 p-6 text-center">
             <div className="flex items-center gap-2 self-start">
               <span className="size-2.5 rounded-full bg-success live-dot" />
               <CardTitle>المراقبة المباشرة للضوضاء</CardTitle>
             </div>
-            <NoiseMeter value={c.noise} size="lg" />
+            <NoiseMeter value={currentNoise} size="lg" />
             <p className="text-sm text-muted-foreground">
-              يتم تحديث القراءة كل عدة ثوانٍ من جهاز الفصل
+              يتم تحديث القراءة من آخر حالة ضوضاء مسجلة لجهاز الفصل.
             </p>
           </Card>
 
-          {/* Attendance summary */}
           <Card className="lg:col-span-2">
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>ملخص الحضور</CardTitle>
-              {c.deviceStatus === 'online' ? (
+              {deviceOnline ? (
                 <Badge variant="success"><Wifi className="size-3" /> الجهاز متصل</Badge>
               ) : (
                 <Badge variant="danger"><WifiOff className="size-3" /> الجهاز غير متصل</Badge>
               )}
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Metric icon={UserCheck} tone="success" label="الحاضرون" value={c.present} />
-              <Metric icon={UserX} tone="danger" label="الغائبون" value={c.absent} />
-              <Metric icon={LogOut} tone="warning" label="خارج الفصل" value={c.outside} />
-              <Metric icon={BookOpen} tone="accent" label="إجمالي الطلاب" value={c.totalStudents} />
+              <Metric icon={UserCheck} tone="success" label="الحاضرون" value={(presence?.presentStudents ?? 0) + (presence?.lateStudents ?? 0)} />
+              <Metric icon={UserX} tone="danger" label="الغائبون" value={presence?.absentStudents ?? 0} />
+              <Metric icon={LogOut} tone="warning" label="خارج الفصل" value={presence?.studentsOutside ?? 0} />
+              <Metric icon={BookOpen} tone="accent" label="إجمالي الطلاب" value={presence?.totalStudents ?? 0} />
 
               {teacher && (
                 <div className="col-span-2 mt-1 rounded-xl border border-border/60 bg-muted/40 p-4 sm:col-span-4">
-                  <p className="mb-3 text-sm font-bold">أداء المعلم — {teacher.name}</p>
+                  <p className="mb-3 text-sm font-bold">المعلم داخل الفصل - {teacher.fullNameAr}</p>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <MiniStat label="هدوء الفصل" value={`${teacher.avgQuiet}٪`} />
-                    <MiniStat label="حضور الطلاب" value={`${teacher.attendanceRate}٪`} />
-                    <MiniStat label="متوسط الخروج" value={teacher.avgExits.toFixed(1)} />
-                    <MiniStat label="مؤشر الانضباط" value={`${teacher.discipline}٪`} />
+                    <MiniStat label="حالة الحضور" value="داخل الفصل" />
+                    <MiniStat label="عدد الطلاب" value={`${presence?.totalStudents ?? 0}`} />
+                    <MiniStat label="خارج الفصل" value={`${presence?.studentsOutside ?? 0}`} />
+                    <MiniStat label="الضوضاء الحالية" value={`${Math.round(currentNoise)} dB`} />
                   </div>
                 </div>
               )}
@@ -105,88 +207,68 @@ export default async function ClassroomDetail({
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Students inside */}
           <Card>
             <CardHeader>
               <CardTitle>الطلاب داخل الفصل ({inside.length})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 pt-2">
-              {inside.length === 0 && (
+              {!loading && inside.length === 0 && (
                 <p className="py-4 text-center text-sm text-muted-foreground">
-                  لا يوجد طلاب مسجلون داخل هذا الفصل حالياً.
+                  لا يوجد طلاب مسجلون داخل هذا الفصل حاليا.
                 </p>
               )}
-              {inside.map((s) => (
-                <StudentRow key={s.id} name={s.name} card={s.cardId} tone="success" label="بالداخل" />
+              {inside.map((state) => (
+                <StudentRow key={state.id} name={state.student.fullNameAr} card={state.student.cardCode} tone="success" label="بالداخل" />
               ))}
             </CardContent>
           </Card>
 
-          {/* Students outside */}
           <Card>
             <CardHeader>
               <CardTitle>الطلاب خارج الفصل ({outside.length})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 pt-2">
-              {outside.length === 0 && (
+              {!loading && outside.length === 0 && (
                 <p className="py-4 text-center text-sm text-muted-foreground">
-                  جميع الطلاب داخل الفصل حالياً.
+                  جميع الطلاب داخل الفصل حاليا.
                 </p>
               )}
-              {outside.map((s) => (
-                <StudentRow key={s.id} name={s.name} card={s.cardId} tone="warning" label={s.lastMovement} />
+              {outside.map((state) => (
+                <StudentRow key={state.id} name={state.student.fullNameAr} card={state.student.cardCode} tone="warning" label="خارج الفصل" />
               ))}
             </CardContent>
           </Card>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Timeline */}
           <Card>
             <CardHeader>
               <CardTitle>سجل الدخول والخروج</CardTitle>
             </CardHeader>
             <CardContent className="pt-2">
               <ol className="relative space-y-4 border-r border-border pr-4">
-                {entryExitTimeline.map((e, i) => {
-                  const map = {
-                    دخول: { icon: LogIn, color: 'text-success', bg: 'bg-success' },
-                    خروج: { icon: LogOut, color: 'text-destructive', bg: 'bg-destructive' },
-                    عودة: { icon: Undo2, color: 'text-accent', bg: 'bg-accent' },
-                  }[e.type]!
-                  const Icon = map.icon
-                  return (
-                    <li key={i} className="relative">
-                      <span
-                        className={`absolute -right-[22px] top-1 size-3 rounded-full ring-4 ring-card ${map.bg}`}
-                      />
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-2 text-sm font-semibold">
-                          <Icon className={`size-4 ${map.color}`} />
-                          {e.student}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{e.time}</span>
-                      </div>
-                      <span className={`text-xs ${map.color}`}>{e.type}</span>
-                    </li>
-                  )
-                })}
+                {movements.map((movement) => (
+                  <MovementItem key={`${movement.id}-exit`} student={movement.student.fullNameAr} time={movement.exitedAt} type="خروج" />
+                ))}
+                {movements.length === 0 && (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    لا توجد حركات مسجلة لهذا الفصل حاليا.
+                  </p>
+                )}
               </ol>
             </CardContent>
           </Card>
 
-          {/* Noise history */}
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>سجل الضوضاء خلال اليوم</CardTitle>
             </CardHeader>
             <CardContent>
-              <NoiseAreaChart data={noiseHistory} />
+              <NoiseAreaChart data={noiseHistory.length > 0 ? noiseHistory : [{ time: 'الآن', noise: currentNoise }]} />
             </CardContent>
           </Card>
         </div>
 
-        {/* Daily notes */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -207,6 +289,38 @@ export default async function ClassroomDetail({
         </Card>
       </div>
     </DashboardShell>
+  )
+}
+
+function MovementItem({
+  student,
+  time,
+  type,
+}: {
+  student: string
+  time: string
+  type: 'دخول' | 'خروج' | 'عودة'
+}) {
+  const map = {
+    دخول: { icon: LogIn, color: 'text-success', bg: 'bg-success' },
+    خروج: { icon: LogOut, color: 'text-destructive', bg: 'bg-destructive' },
+    عودة: { icon: Undo2, color: 'text-accent', bg: 'bg-accent' },
+  }[type]
+  const Icon = map.icon
+  return (
+    <li className="relative">
+      <span className={`absolute -right-[22px] top-1 size-3 rounded-full ring-4 ring-card ${map.bg}`} />
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <Icon className={`size-4 ${map.color}`} />
+          {student}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {new Date(time).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+      <span className={`text-xs ${map.color}`}>{type}</span>
+    </li>
   )
 }
 
