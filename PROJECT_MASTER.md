@@ -6,7 +6,7 @@ Audience: future AI tools, developers, auditors, project managers, investors, an
 
 Last verified from repository state through:
 
-- Phase 2I.1 Teacher Punctuality Architecture Correction
+- Phase 2J Communication & Delivery Foundation
 
 This document describes verified repository facts only. It does not describe planned features as completed.
 
@@ -70,6 +70,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2H.2 Alert & Insight Configuration
 - Phase 2I Management Intelligence Foundation
 - Phase 2I.1 Teacher Punctuality Architecture Correction
+- Phase 2J Communication & Delivery Foundation
 
 ### In Progress
 
@@ -77,7 +78,6 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 
 ### Planned
 
-- Reporting Delivery Engine
 - Phase 3.0 AI Layer
 
 ### Phase 2A: SaaS Foundation
@@ -904,6 +904,74 @@ Not implemented:
 - Teacher lesson plans.
 - Reporting engine.
 - AI.
+
+### Phase 2J: Communication & Delivery Foundation
+
+Objective:
+
+Create the foundation for delivering existing alerts, insights, and management intelligence without integrating external communication providers.
+
+Implemented:
+
+- `Notification` model for communication records.
+- Notification channels: `DASHBOARD`, `EMAIL`, and `WHATSAPP`.
+- Notification statuses: `PENDING`, `READY`, `SENT`, `FAILED`, and `CANCELLED`.
+- Notification records can reference existing `Alert` or `Insight` rows.
+- Delivery preferences on `SchoolSettings` for dashboard, email, and WhatsApp notifications.
+- `ReportDefinition` model for daily, weekly, and monthly report definitions.
+- `ExportDefinition` model for future PDF and Excel export definitions.
+- Tenant-scoped notification, report definition, and delivery preference APIs.
+- Minimal Communication page using the approved dashboard design language.
+
+Major architectural decisions:
+
+- Notifications are records only.
+- Reports are definitions only.
+- Exports are definitions only.
+- The communication layer references existing alerts, insights, and analytics instead of duplicating operational data.
+- Dashboard, email, and WhatsApp preferences are stored as school-scoped settings.
+- No external delivery provider exists yet.
+- No SMTP, WhatsApp API, Twilio, Firebase, push notification, scheduled job, cron, queue, background worker, AI, automation, or machine learning system was added.
+- Existing alert, insight, analytics, attendance, movement, noise, and device engines were not modified.
+
+APIs added:
+
+- `GET /api/notifications`
+- `GET /api/notifications/[notificationId]`
+- `PATCH /api/notifications/[notificationId]`
+- `GET /api/reports`
+- `GET /api/reports/[reportId]`
+- `GET /api/delivery-preferences`
+- `PATCH /api/delivery-preferences`
+
+Database entities added:
+
+- `Notification`
+- `ReportDefinition`
+- `ExportDefinition`
+
+Database changes:
+
+- `NotificationType`
+- `NotificationChannel`
+- `NotificationStatus`
+- `ReportDefinitionType`
+- `ExportFormat`
+- `SchoolSettings.dashboard_notifications_enabled`
+- `SchoolSettings.email_notifications_enabled`
+- `SchoolSettings.whatsapp_notifications_enabled`
+
+Not implemented:
+
+- Actual email delivery.
+- Actual WhatsApp delivery.
+- Push notifications.
+- Provider integrations.
+- Scheduled report delivery.
+- Background workers.
+- File generation.
+- AI.
+- Automation.
 
 ---
 
@@ -1738,6 +1806,18 @@ Permission terms:
 | GET | `/api/analytics/trends` | Return KPI trend snapshots using existing period architecture | Tenant scoped |
 | GET | `/api/analytics/comparisons` | Compare selected management subjects for one KPI and period | Tenant scoped |
 
+### Communication
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| GET | `/api/notifications` | List stored notification records with pagination and filters | Tenant scoped |
+| GET | `/api/notifications/[notificationId]` | Get one notification record | Tenant scoped |
+| PATCH | `/api/notifications/[notificationId]` | Update notification record status only | Tenant scoped |
+| GET | `/api/reports` | List report definitions and export definitions | Tenant scoped |
+| GET | `/api/reports/[reportId]` | Get one report definition | Tenant scoped |
+| GET | `/api/delivery-preferences` | Read school delivery preferences | Tenant scoped |
+| PATCH | `/api/delivery-preferences` | Update school delivery preferences | Tenant scoped |
+
 ### Teachers
 
 | Method | Route | Purpose | Permissions |
@@ -2088,7 +2168,7 @@ The current movement page keeps the approved layout and now reads derived moveme
 
 ## 14. Reporting Roadmap
 
-Status: planned, not implemented.
+Status: Phase 2J definition foundation implemented. Report generation and delivery are not implemented.
 
 Intended purpose:
 
@@ -2100,17 +2180,25 @@ Planned architecture direction:
 - Reports should use academic hierarchy filters.
 - Reports should support export actions when implemented.
 - Reports should consume real attendance, movement, device, and academic data once those modules exist.
+- Current report definitions reference existing analytics, KPIs, rankings, trends, comparisons, alerts, and insights.
+
+Implemented foundation:
+
+- ReportDefinition database model.
+- ExportDefinition database model.
+- Tenant-scoped report definition APIs.
 
 Not implemented:
 
-- Report database model.
 - Report generation engine.
-- Export generation.
+- PDF generation.
+- Excel generation.
 - Scheduled reports.
+- External report delivery.
 
 Note:
 
-The current reports page displays mock/prototype report cards.
+The current reports page keeps the approved dashboard layout. Phase 2J adds definition records and APIs only.
 
 ---
 
@@ -2162,17 +2250,14 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2H.1 Event-Triggered Intelligence Correction
 - Phase 2H.2 Alert & Insight Configuration
 - Phase 2I Management Intelligence Foundation
+- Phase 2I.1 Teacher Punctuality Architecture Correction
+- Phase 2J Communication & Delivery Foundation
 
 ### Next
 
-- Reporting Delivery Engine
 - Phase 3.0 AI Layer
 
 ### Planned Detail
-
-Reporting Delivery Engine:
-
-- Intended to add report delivery, exports, and scheduled report workflows after management intelligence is stable.
 
 Phase 3.0 AI Layer:
 

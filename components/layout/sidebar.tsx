@@ -12,6 +12,7 @@ import {
   GraduationCap,
   FileBarChart,
   Bell,
+  MessageSquare,
   Cpu,
   Settings,
   Sparkles,
@@ -32,6 +33,7 @@ const nav = [
   { href: '/students', labelKey: 'sidebar.students', icon: GraduationCap },
   { href: '/reports', labelKey: 'sidebar.reports', icon: FileBarChart },
   { href: '/alerts', labelKey: 'sidebar.alerts', icon: Bell },
+  { href: '/communication', labelKey: 'sidebar.communication', icon: MessageSquare },
   { href: '/devices', labelKey: 'sidebar.devices', icon: Cpu },
   { href: '/settings', labelKey: 'sidebar.settings', icon: Settings },
 ]

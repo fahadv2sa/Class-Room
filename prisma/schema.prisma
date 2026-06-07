@@ -235,6 +235,37 @@ enum ManagementKpiType {
   STUDENT_ATTENTION_SCORE
 }
 
+enum NotificationType {
+  ALERT
+  INSIGHT
+  REPORT
+}
+
+enum NotificationChannel {
+  DASHBOARD
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  READY
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum ReportDefinitionType {
+  DAILY_SUMMARY
+  WEEKLY_SUMMARY
+  MONTHLY_SUMMARY
+}
+
+enum ExportFormat {
+  PDF
+  EXCEL
+}
+
 model SuperAdmin {
   id                           String                      @id @default(cuid())
   email                        String                      @unique
@@ -299,6 +330,9 @@ model School {
   alerts            Alert[]
   insights          Insight[]
   managementKpiSnapshots ManagementKpiSnapshot[]
+  notifications     Notification[]
+  reportDefinitions ReportDefinition[]
+  exportDefinitions ExportDefinition[]
 
   @@index([status])
   @@index([subscriptionStatus])
@@ -894,7 +928,9 @@ model Alert {
   teacher        Teacher?        @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
   student        Student?        @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
   device         ClassroomDevice? @relation(fields: [deviceId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  notifications  Notification[]
 
+  @@unique([id, schoolId])
   @@index([schoolId])
   @@index([classroomId])
   @@index([teacherId])
@@ -929,7 +965,9 @@ model Insight {
   classroom       Classroom?      @relation(fields: [classroomId, schoolId], references: [id, schoolId], onDelete: Restrict)
   teacher         Teacher?        @relation(fields: [teacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
   student         Student?        @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  notifications   Notification[]
 
+  @@unique([id, schoolId])
   @@index([schoolId])
   @@index([classroomId])
   @@index([teacherId])
@@ -968,6 +1006,76 @@ model ManagementKpiSnapshot {
   @@map("management_kpi_snapshots")
 }
 
+model Notification {
+  id                  String              @id @default(cuid())
+  schoolId            String              @map("school_id")
+  alertId             String?             @map("alert_id")
+  insightId           String?             @map("insight_id")
+  notificationType    NotificationType    @map("notification_type")
+  notificationChannel NotificationChannel @map("notification_channel")
+  title               String
+  message             String
+  status              NotificationStatus  @default(PENDING)
+  sourceKey           String?             @unique @map("source_key")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+  school              School              @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  alert               Alert?              @relation(fields: [alertId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  insight             Insight?            @relation(fields: [insightId, schoolId], references: [id, schoolId], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([alertId])
+  @@index([insightId])
+  @@index([notificationType])
+  @@index([notificationChannel])
+  @@index([status])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model ReportDefinition {
+  id                String               @id @default(cuid())
+  schoolId          String               @map("school_id")
+  reportType        ReportDefinitionType @map("report_type")
+  name              String
+  description       String
+  period            SummaryPeriod
+  dataSources       String[]             @default([]) @map("data_sources")
+  isActive          Boolean              @default(true) @map("is_active")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  school            School               @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  exportDefinitions ExportDefinition[]
+
+  @@unique([schoolId, reportType])
+  @@unique([id, schoolId])
+  @@index([schoolId])
+  @@index([reportType])
+  @@index([period])
+  @@index([isActive])
+  @@map("report_definitions")
+}
+
+model ExportDefinition {
+  id                 String           @id @default(cuid())
+  schoolId           String           @map("school_id")
+  reportDefinitionId String           @map("report_definition_id")
+  format             ExportFormat
+  name               String
+  isActive           Boolean          @default(true) @map("is_active")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  school             School           @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  reportDefinition   ReportDefinition @relation(fields: [reportDefinitionId, schoolId], references: [id, schoolId], onDelete: Cascade)
+
+  @@unique([schoolId, reportDefinitionId, format])
+  @@index([schoolId])
+  @@index([reportDefinitionId])
+  @@index([format])
+  @@index([isActive])
+  @@map("export_definitions")
+}
+
 model SchoolSettings {
   id                      String   @id @default(cuid())
   schoolId                String   @unique @map("school_id")
@@ -985,6 +1093,9 @@ model SchoolSettings {
   attendanceAlertsEnabled Boolean  @default(true) @map("attendance_alerts_enabled")
   deviceAlertsEnabled     Boolean  @default(true) @map("device_alerts_enabled")
   dailyReportEnabled      Boolean  @default(false) @map("daily_report_enabled")
+  dashboardNotificationsEnabled Boolean @default(true) @map("dashboard_notifications_enabled")
+  emailNotificationsEnabled Boolean @default(false) @map("email_notifications_enabled")
+  whatsappNotificationsEnabled Boolean @default(false) @map("whatsapp_notifications_enabled")
   schoolNameOverride      String?  @map("school_name_override")
   contactPhone            String?  @map("contact_phone")
   enabledAlertTypes       String[] @default(["STUDENT_LATE", "STUDENT_ABSENT", "EXCESSIVE_STUDENT_EXITS", "HIGH_NOISE_EVENT", "DEVICE_OFFLINE"]) @map("enabled_alert_types")
