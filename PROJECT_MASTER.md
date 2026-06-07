@@ -6,7 +6,7 @@ Audience: future AI tools, developers, auditors, project managers, investors, an
 
 Last verified from repository state through:
 
-- Phase 2J.1 Event-Triggered Notification Correction
+- Phase 2K AI & Automation Foundation
 
 This document describes verified repository facts only. It does not describe planned features as completed.
 
@@ -72,6 +72,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2I.1 Teacher Punctuality Architecture Correction
 - Phase 2J Communication & Delivery Foundation
 - Phase 2J.1 Event-Triggered Notification Correction
+- Phase 2K AI & Automation Foundation
 
 ### In Progress
 
@@ -79,7 +80,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 
 ### Planned
 
-- Phase 3.0 AI Layer
+- No next phase is represented by committed code in the current repository.
 
 ### Phase 2A: SaaS Foundation
 
@@ -1037,6 +1038,73 @@ Not implemented:
 - Automation.
 - AI.
 
+### Phase 2K: AI & Automation Foundation
+
+Objective:
+
+Create a bounded management intelligence assistance foundation using existing platform data only.
+
+Implemented:
+
+- Stored AI recommendation records.
+- Stored AI summary records.
+- Stored automation definition records.
+- Tenant-scoped AI recommendation APIs.
+- Tenant-scoped AI summary APIs.
+- Tenant-scoped automation definition APIs.
+- Management AI page using the existing dashboard design language.
+- Evidence and data source fields for every recommendation and summary.
+- Explicit refresh endpoints for deterministic recommendation and summary generation.
+- Automation definitions for trigger, condition, and action metadata only.
+
+Major architectural decisions:
+
+- Phase 2K is management intelligence assistance, not a general chatbot.
+- No conversation interface, open-ended assistant, voice assistant, AI search, document chatbot, or knowledge base chatbot was added.
+- No external AI provider was added.
+- Recommendations and summaries are deterministic records generated from existing validated layers: management KPI snapshots, alerts, insights, notifications, attendance, movement, and noise-derived data.
+- Recommendations must remain explainable through `explanation`, `evidence`, and `data_sources`.
+- Evidence references source records and metrics instead of copying raw operational event history.
+- Automation definitions do not execute actions. They store future-ready trigger, condition, and action metadata only.
+- Operational engines, analytics engine, communication engine, device architecture, settings, and tenant architecture were not redesigned.
+
+APIs added:
+
+- `GET /api/ai/recommendations`
+- `POST /api/ai/recommendations`
+- `GET /api/ai/recommendations/[recommendationId]`
+- `PATCH /api/ai/recommendations/[recommendationId]`
+- `GET /api/ai/summaries`
+- `POST /api/ai/summaries`
+- `GET /api/ai/summaries/[summaryId]`
+- `GET /api/automation-definitions`
+- `POST /api/automation-definitions`
+- `GET /api/automation-definitions/[automationDefinitionId]`
+- `PATCH /api/automation-definitions/[automationDefinitionId]`
+
+Database entities added:
+
+- `AIRecommendation`
+- `AISummary`
+- `AutomationDefinition`
+
+Database changes:
+
+- `AIRecommendationType`
+- `AIRecommendationPriority`
+- `AIRecommendationStatus`
+- `AISummaryType`
+- `AutomationTriggerType`
+- `AutomationActionType`
+
+Not implemented:
+
+- General chatbot.
+- Open-ended AI assistant.
+- External LLM integration.
+- Email, WhatsApp, SMS, push, queues, workers, cron jobs, or action execution.
+- Reporting engine, ranking engine, recommendations beyond deterministic stored management assistance, or AI-generated operational decisions.
+
 ---
 
 ## 3. System Architecture
@@ -1882,6 +1950,22 @@ Permission terms:
 | GET | `/api/delivery-preferences` | Read school delivery preferences | Tenant scoped |
 | PATCH | `/api/delivery-preferences` | Update school delivery preferences | Tenant scoped |
 
+### Management AI & Automation
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| GET | `/api/ai/recommendations` | List stored explainable AI recommendations | Tenant scoped |
+| POST | `/api/ai/recommendations` | Refresh deterministic AI recommendations from existing data layers | Tenant scoped |
+| GET | `/api/ai/recommendations/[recommendationId]` | Get one AI recommendation | Tenant scoped |
+| PATCH | `/api/ai/recommendations/[recommendationId]` | Update AI recommendation status only | Tenant scoped |
+| GET | `/api/ai/summaries` | List stored AI summaries | Tenant scoped |
+| POST | `/api/ai/summaries` | Refresh deterministic AI summaries from existing data layers | Tenant scoped |
+| GET | `/api/ai/summaries/[summaryId]` | Get one AI summary | Tenant scoped |
+| GET | `/api/automation-definitions` | List stored automation definitions | Tenant scoped |
+| POST | `/api/automation-definitions` | Ensure default automation definitions exist without executing actions | Tenant scoped |
+| GET | `/api/automation-definitions/[automationDefinitionId]` | Get one automation definition | Tenant scoped |
+| PATCH | `/api/automation-definitions/[automationDefinitionId]` | Toggle automation definition active state only | Tenant scoped |
+
 ### Teachers
 
 | Method | Route | Purpose | Permissions |
@@ -2268,29 +2352,42 @@ The current reports page keeps the approved dashboard layout. Phase 2J adds defi
 
 ## 15. AI Roadmap
 
-Status: planned, not implemented.
+Status: Phase 2K foundation implemented.
 
 Intended purpose:
 
-Add future AI insights over school operations, attendance, movement, classroom noise, devices, and reports.
+Provide management intelligence assistance over school operations, attendance, movement, classroom noise, devices, alerts, insights, notifications, analytics, and reports.
 
-Planned architecture direction:
+Implemented architecture direction:
 
 - AI must be tenant-isolated.
 - AI insights must not leak data across schools.
-- AI should consume normalized reporting/analytics data after operational engines exist.
-- AI output should be explainable enough for school administrators.
+- AI recommendations and summaries consume existing validated platform layers.
+- AI output must be explainable enough for school administrators.
+- AI records store evidence and data source references.
+- Automation stores definitions only and does not execute actions.
+
+Implemented foundation:
+
+- `AIRecommendation` database model.
+- `AISummary` database model.
+- `AutomationDefinition` database model.
+- Tenant-scoped AI recommendation APIs.
+- Tenant-scoped AI summary APIs.
+- Tenant-scoped automation definition APIs.
+- Management AI page.
 
 Not implemented:
 
-- AI database model.
-- AI inference pipeline.
-- AI recommendations engine.
+- General chatbot.
+- Open-ended assistant.
+- External AI provider integration.
 - AI-generated reports.
+- Automation action execution.
 
 Note:
 
-The current AI insights component displays mock/prototype content only.
+Phase 2K is deterministic management assistance. It is not a ChatGPT-style interface inside the platform.
 
 ---
 
@@ -2317,16 +2414,15 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2I.1 Teacher Punctuality Architecture Correction
 - Phase 2J Communication & Delivery Foundation
 - Phase 2J.1 Event-Triggered Notification Correction
+- Phase 2K AI & Automation Foundation
 
 ### Next
 
-- Phase 3.0 AI Layer
+- No next phase is represented by committed code in the current repository.
 
 ### Planned Detail
 
-Phase 3.0 AI Layer:
-
-- Intended to add AI insights and analytics after real operational data exists.
+- Future phases may expand recommendation quality, summary periods, report generation, and automation execution only when explicitly requested.
 
 ---
 

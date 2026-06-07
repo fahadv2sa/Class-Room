@@ -266,6 +266,52 @@ enum ExportFormat {
   EXCEL
 }
 
+enum AIRecommendationType {
+  CLASSROOM_PERFORMANCE_DECLINE
+  NOISE_INCREASE
+  MOVEMENT_INCREASE
+  ATTENDANCE_DROP
+  STUDENT_REQUIRES_ATTENTION
+  DEVICE_RELIABILITY
+}
+
+enum AIRecommendationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AIRecommendationStatus {
+  ACTIVE
+  DISMISSED
+  RESOLVED
+}
+
+enum AISummaryType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  TERM
+  SCHOOL
+  CLASSROOM
+  TEACHER
+  STUDENT_ATTENTION
+}
+
+enum AutomationTriggerType {
+  ALERT_CREATED
+  INSIGHT_CREATED
+  KPI_DROPS
+  DEVICE_OFFLINE
+}
+
+enum AutomationActionType {
+  CREATE_NOTIFICATION
+  CREATE_RECOMMENDATION
+  CREATE_SUMMARY
+}
+
 model SuperAdmin {
   id                           String                      @id @default(cuid())
   email                        String                      @unique
@@ -333,6 +379,9 @@ model School {
   notifications     Notification[]
   reportDefinitions ReportDefinition[]
   exportDefinitions ExportDefinition[]
+  aiRecommendations AIRecommendation[]
+  aiSummaries        AISummary[]
+  automationDefinitions AutomationDefinition[]
 
   @@index([status])
   @@index([subscriptionStatus])
@@ -1074,6 +1123,83 @@ model ExportDefinition {
   @@index([format])
   @@index([isActive])
   @@map("export_definitions")
+}
+
+model AIRecommendation {
+  id                 String                   @id @default(cuid())
+  schoolId           String                   @map("school_id")
+  recommendationType AIRecommendationType     @map("recommendation_type")
+  priority           AIRecommendationPriority @default(MEDIUM)
+  status             AIRecommendationStatus   @default(ACTIVE)
+  subjectType        ManagementSubjectType?   @map("subject_type")
+  subjectId          String?                  @map("subject_id")
+  title              String
+  recommendation     String
+  explanation        String
+  evidence           Json
+  dataSources        String[]                 @default([]) @map("data_sources")
+  sourceKey          String                   @unique @map("source_key")
+  generatedAt        DateTime                 @default(now()) @map("generated_at")
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+  school             School                   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([recommendationType])
+  @@index([priority])
+  @@index([status])
+  @@index([subjectType])
+  @@index([subjectId])
+  @@index([generatedAt])
+  @@map("ai_recommendations")
+}
+
+model AISummary {
+  id          String                 @id @default(cuid())
+  schoolId    String                 @map("school_id")
+  summaryType AISummaryType          @map("summary_type")
+  period      SummaryPeriod?
+  subjectType ManagementSubjectType? @map("subject_type")
+  subjectId   String?                @map("subject_id")
+  title       String
+  summary     String
+  explanation String
+  evidence    Json
+  dataSources String[]               @default([]) @map("data_sources")
+  sourceKey   String                 @unique @map("source_key")
+  generatedAt DateTime               @default(now()) @map("generated_at")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+  school      School                 @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([summaryType])
+  @@index([period])
+  @@index([subjectType])
+  @@index([subjectId])
+  @@index([generatedAt])
+  @@map("ai_summaries")
+}
+
+model AutomationDefinition {
+  id           String                @id @default(cuid())
+  schoolId     String                @map("school_id")
+  name         String
+  triggerType  AutomationTriggerType @map("trigger_type")
+  condition    Json
+  actionType   AutomationActionType  @map("action_type")
+  actionConfig Json                  @map("action_config")
+  isActive     Boolean               @default(true) @map("is_active")
+  sourceKey    String                @unique @map("source_key")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  school       School                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([triggerType])
+  @@index([actionType])
+  @@index([isActive])
+  @@map("automation_definitions")
 }
 
 model SchoolSettings {
