@@ -6,7 +6,7 @@ Audience: future AI tools, developers, auditors, project managers, investors, an
 
 Last verified from repository state through:
 
-- Phase 2I Management Intelligence Foundation
+- Phase 2I.1 Teacher Punctuality Architecture Correction
 
 This document describes verified repository facts only. It does not describe planned features as completed.
 
@@ -69,6 +69,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2H.1 Event-Triggered Intelligence Correction
 - Phase 2H.2 Alert & Insight Configuration
 - Phase 2I Management Intelligence Foundation
+- Phase 2I.1 Teacher Punctuality Architecture Correction
 
 ### In Progress
 
@@ -801,7 +802,7 @@ Major architectural decisions:
 - No new source-of-truth operational model was created.
 - No raw operational data is duplicated.
 - Historical KPI snapshots include `score_version`.
-- Current management score version is `1`.
+- Current management score version is `2`.
 - Scoring formulas are foundation models and may be replaced in future phases without invalidating historical snapshot interpretation.
 - Trend periods reuse `DAILY`, `WEEKLY`, `MONTHLY`, `TERM`, and `YEARLY`.
 - No AI, machine learning, recommendations, notification delivery, scheduled jobs, PDF reports, Excel exports, email reports, WhatsApp reports, or new operational engines were added.
@@ -824,7 +825,7 @@ Scoring philosophy:
 - Movement score is derived from existing student movement records.
 - Classroom performance is a foundation weighted score combining attendance, noise, and movement.
 - Student attention score is a foundation score derived from existing attendance, movement, alert, and insight data.
-- Teacher punctuality currently uses teacher-linked classroom noise summaries as a placeholder foundation signal until teacher schedule data exists.
+- Teacher punctuality is derived from observed teacher classroom-entry records.
 
 APIs added:
 
@@ -853,6 +854,56 @@ Not implemented:
 - Ranking engine.
 - Alerts engine.
 - Exports.
+
+### Phase 2I.1: Teacher Punctuality Architecture Correction
+
+Objective:
+
+Correct the Teacher Punctuality KPI source without redesigning analytics, reports, dashboards, or operational engines.
+
+Implemented:
+
+- `TEACHER_PUNCTUALITY` now uses existing `TeacherMovementRecord.enteredAt` classroom-entry history.
+- Teacher punctuality no longer uses `TeacherNoiseSummary` or classroom noise performance.
+- Management score version was incremented from `1` to `2`.
+- Existing version `1` KPI snapshots remain valid and are not rewritten.
+- The Reports page and analytics APIs continue using the existing `ManagementKpiSnapshot` architecture.
+
+Major architectural decisions:
+
+- Teacher punctuality means observed teacher classroom-entry behavior in this phase.
+- Noise-based punctuality was rejected because noise performance and punctuality are separate operational concepts.
+- No timetable, schedule, lesson plan, class period, bell schedule, school calendar, notification delivery, reporting redesign, analytics redesign, or AI system was added.
+- `TeacherMovementRecord` remains derived from RFID scan events and does not become a separate source of truth.
+- The scoring foundation records `observedEntryCount` metadata so future phases can interpret version `2` snapshots.
+
+Current foundation calculation:
+
+- If an active teacher has at least one observed classroom entry in the requested period, the foundation score is `100`.
+- If an active teacher has no observed classroom entry in the requested period, the foundation score is `0`.
+- This does not measure timetable compliance because no timetable or schedule subsystem exists.
+
+APIs added:
+
+- No new API was added in Phase 2I.1.
+
+Database entities added:
+
+- No database entity was added in Phase 2I.1.
+
+Database changes:
+
+- No database schema change was made in Phase 2I.1.
+
+Not implemented:
+
+- Timetable compliance.
+- Teacher schedules.
+- Class periods.
+- Bell schedules.
+- Teacher lesson plans.
+- Reporting engine.
+- AI.
 
 ---
 

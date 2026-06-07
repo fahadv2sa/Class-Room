@@ -8,7 +8,7 @@ import { scopedSchoolId } from '@/lib/academic/access'
 import type { AuthContext } from '@/lib/auth/session'
 import { prisma } from '@/lib/prisma'
 
-export const MANAGEMENT_SCORE_VERSION = 1
+export const MANAGEMENT_SCORE_VERSION = 2
 
 const kpiTypes = [
   'ATTENDANCE_RATE',
@@ -140,7 +140,7 @@ export async function refreshManagementKpis({
   periodStart: Date
   periodEnd: Date
 }) {
-  const [records, movements, classroomNoise, teacherNoise, alerts, insights, classrooms, students, teachers] = await Promise.all([
+  const [records, movements, classroomNoise, teacherEntries, alerts, insights, classrooms, students, teachers] = await Promise.all([
     prisma.studentAttendanceRecord.findMany({
       where: {
         schoolId,
@@ -156,9 +156,9 @@ export async function refreshManagementKpis({
       where: { schoolId, period: period === 'DAILY' ? 'DAILY' : undefined, periodStart: { gte: periodStart, lt: periodEnd } },
       select: { classroomId: true, quietScore: true },
     }),
-    prisma.teacherNoiseSummary.findMany({
-      where: { schoolId, period: period === 'DAILY' ? 'DAILY' : undefined, periodStart: { gte: periodStart, lt: periodEnd } },
-      select: { teacherId: true, quietScore: true },
+    prisma.teacherMovementRecord.findMany({
+      where: { schoolId, enteredAt: { gte: periodStart, lt: periodEnd } },
+      select: { teacherId: true },
     }),
     prisma.alert.findMany({
       where: { schoolId, createdAt: { gte: periodStart, lt: periodEnd }, status: { not: 'RESOLVED' } },
@@ -228,10 +228,24 @@ export async function refreshManagementKpis({
   }
 
   for (const teacher of teachers) {
-    const teacherNoiseRows = teacherNoise.filter((row) => row.teacherId === teacher.id)
-    const teacherNoiseScore = teacherNoiseRows.length ? teacherNoiseRows.reduce((sum, row) => sum + row.quietScore, 0) / teacherNoiseRows.length : 100
+    const teacherEntryRows = teacherEntries.filter((row) => row.teacherId === teacher.id)
+    const teacherPunctualityScore = teacherEntryRows.length > 0 ? 100 : 0
     writes.push(
-      upsertKpi({ schoolId, subjectType: 'TEACHER', subjectId: teacher.id, kpiType: 'TEACHER_PUNCTUALITY', period, periodStart, periodEnd, value: teacherNoiseScore }),
+      upsertKpi({
+        schoolId,
+        subjectType: 'TEACHER',
+        subjectId: teacher.id,
+        kpiType: 'TEACHER_PUNCTUALITY',
+        period,
+        periodStart,
+        periodEnd,
+        value: teacherPunctualityScore,
+        metadata: {
+          source: 'TeacherMovementRecord.enteredAt',
+          observedEntryCount: teacherEntryRows.length,
+          scoring: 'observed_teacher_classroom_entry_v2',
+        },
+      }),
     )
   }
 
