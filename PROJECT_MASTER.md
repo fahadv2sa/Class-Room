@@ -6,7 +6,7 @@ Audience: future AI tools, developers, auditors, project managers, investors, an
 
 Last verified from repository state through:
 
-- Phase 2J Communication & Delivery Foundation
+- Phase 2J.1 Event-Triggered Notification Correction
 
 This document describes verified repository facts only. It does not describe planned features as completed.
 
@@ -71,6 +71,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2I Management Intelligence Foundation
 - Phase 2I.1 Teacher Punctuality Architecture Correction
 - Phase 2J Communication & Delivery Foundation
+- Phase 2J.1 Event-Triggered Notification Correction
 
 ### In Progress
 
@@ -917,6 +918,7 @@ Implemented:
 - Notification channels: `DASHBOARD`, `EMAIL`, and `WHATSAPP`.
 - Notification statuses: `PENDING`, `READY`, `SENT`, `FAILED`, and `CANCELLED`.
 - Notification records can reference existing `Alert` or `Insight` rows.
+- Notification records are synchronized when Alert or Insight events are created or updated.
 - Delivery preferences on `SchoolSettings` for dashboard, email, and WhatsApp notifications.
 - `ReportDefinition` model for daily, weekly, and monthly report definitions.
 - `ExportDefinition` model for future PDF and Excel export definitions.
@@ -926,10 +928,12 @@ Implemented:
 Major architectural decisions:
 
 - Notifications are records only.
+- Notifications are event-triggered; reads consume stored notification records.
 - Reports are definitions only.
 - Exports are definitions only.
 - The communication layer references existing alerts, insights, and analytics instead of duplicating operational data.
 - Dashboard, email, and WhatsApp preferences are stored as school-scoped settings.
+- Read-triggered notification materialization is rejected because reads must not create communication data.
 - No external delivery provider exists yet.
 - No SMTP, WhatsApp API, Twilio, Firebase, push notification, scheduled job, cron, queue, background worker, AI, automation, or machine learning system was added.
 - Existing alert, insight, analytics, attendance, movement, noise, and device engines were not modified.
@@ -972,6 +976,66 @@ Not implemented:
 - File generation.
 - AI.
 - Automation.
+
+### Phase 2J.1: Event-Triggered Notification Correction
+
+Objective:
+
+Correct notification creation from read-triggered materialization to event-triggered synchronization while preserving the Phase 2J communication foundation.
+
+Implemented:
+
+- `GET /api/notifications` is read-only.
+- Notification creation was removed from the notification read API route.
+- Alert upsert events synchronize alert notification records.
+- Insight upsert events synchronize insight notification records.
+- Alert status update events synchronize alert notification records.
+- Insight status update events synchronize insight notification records.
+- Notification source keys remain idempotent per source record and channel.
+
+Major architectural decisions:
+
+- Events create data.
+- Reads consume data.
+- Read-triggered notification materialization was rejected because loading a list must not create communication records.
+- Alert notifications use source keys in the format `alert:{alertId}:{channel}`.
+- Insight notifications use source keys in the format `insight:{insightId}:{channel}`.
+- Existing notification status is preserved when the source title or message is synchronized.
+- No provider delivery, queue, worker, cron, scheduler, automation, AI, analytics redesign, reporting redesign, or communication redesign was added.
+
+Final notification lifecycle:
+
+- Operational intelligence creates or updates an Alert or Insight.
+- The Alert or Insight event path synchronizes Notification records for enabled school channels.
+- Duplicate notifications are prevented by unique `Notification.source_key`.
+- Notification APIs read stored notification records.
+- Notification PATCH updates notification status only.
+- External delivery remains future work.
+
+APIs added:
+
+- No new API was added in Phase 2J.1.
+
+Database entities added:
+
+- No database entity was added in Phase 2J.1.
+
+Database changes:
+
+- No database schema change was made in Phase 2J.1.
+
+Not implemented:
+
+- Email sending.
+- WhatsApp sending.
+- SMS sending.
+- Push notifications.
+- Queues.
+- Workers.
+- Cron jobs.
+- Schedulers.
+- Automation.
+- AI.
 
 ---
 
@@ -2252,6 +2316,7 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2I Management Intelligence Foundation
 - Phase 2I.1 Teacher Punctuality Architecture Correction
 - Phase 2J Communication & Delivery Foundation
+- Phase 2J.1 Event-Triggered Notification Correction
 
 ### Next
 

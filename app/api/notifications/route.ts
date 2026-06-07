@@ -3,7 +3,6 @@ import { getTenantFilter } from '@/lib/academic/access'
 import { authResponseError } from '@/lib/auth/session'
 import {
   communicationSchoolId,
-  materializeCommunicationRecords,
   normalizeNotificationChannel,
   normalizeNotificationStatus,
   normalizeNotificationType,
@@ -24,8 +23,6 @@ export async function GET(request: Request) {
     const alertId = url.searchParams.get('alertId')
     const insightId = url.searchParams.get('insightId')
     const { page, pageSize, skip, take } = parsePagination(url)
-
-    if (schoolId) await materializeCommunicationRecords(schoolId)
 
     const where: Prisma.NotificationWhereInput = {
       ...(schoolId ? { schoolId } : {}),

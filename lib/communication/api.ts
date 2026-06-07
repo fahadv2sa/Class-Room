@@ -124,60 +124,77 @@ function enabledChannels(settings: {
   return channels
 }
 
-export async function materializeCommunicationRecords(schoolId: string) {
-  const settings = await ensureCommunicationSettings(schoolId)
-  const channels = enabledChannels(settings)
-  if (!channels.length) return
+async function notificationChannelsForSchool(schoolId: string) {
+  const settings = await prisma.schoolSettings.findUnique({
+    where: { schoolId },
+    select: {
+      dashboardNotificationsEnabled: true,
+      emailNotificationsEnabled: true,
+      whatsappNotificationsEnabled: true,
+    },
+  })
+  if (!settings) return enabledChannels(defaultSchoolSettings)
+  return enabledChannels(settings)
+}
 
-  const [alerts, insights] = await Promise.all([
-    prisma.alert.findMany({
-      where: { schoolId },
-      select: { id: true, title: true, description: true },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
-    }),
-    prisma.insight.findMany({
-      where: { schoolId },
-      select: { id: true, title: true, description: true },
-      orderBy: { lastDetectedAt: 'desc' },
-      take: 200,
-    }),
-  ])
+export async function syncAlertNotifications(input: {
+  schoolId: string
+  alertId: string
+  title: string
+  message: string
+}) {
+  const channels = await notificationChannelsForSchool(input.schoolId)
+  await Promise.all(
+    channels.map((channel) =>
+      prisma.notification.upsert({
+        where: { sourceKey: `alert:${input.alertId}:${channel}` },
+        create: {
+          schoolId: input.schoolId,
+          alertId: input.alertId,
+          notificationType: 'ALERT',
+          notificationChannel: channel,
+          title: input.title,
+          message: input.message,
+          status: 'PENDING',
+          sourceKey: `alert:${input.alertId}:${channel}`,
+        },
+        update: {
+          title: input.title,
+          message: input.message,
+        },
+      }),
+    ),
+  )
+}
 
-  const data: Prisma.NotificationCreateManyInput[] = []
-  for (const channel of channels) {
-    for (const alert of alerts) {
-      data.push({
-        schoolId,
-        alertId: alert.id,
-        notificationType: 'ALERT',
-        notificationChannel: channel,
-        title: alert.title,
-        message: alert.description,
-        status: 'PENDING',
-        sourceKey: `alert:${alert.id}:${channel}`,
-      })
-    }
-    for (const insight of insights) {
-      data.push({
-        schoolId,
-        insightId: insight.id,
-        notificationType: 'INSIGHT',
-        notificationChannel: channel,
-        title: insight.title,
-        message: insight.description,
-        status: 'PENDING',
-        sourceKey: `insight:${insight.id}:${channel}`,
-      })
-    }
-  }
-
-  if (data.length) {
-    await prisma.notification.createMany({
-      data,
-      skipDuplicates: true,
-    })
-  }
+export async function syncInsightNotifications(input: {
+  schoolId: string
+  insightId: string
+  title: string
+  message: string
+}) {
+  const channels = await notificationChannelsForSchool(input.schoolId)
+  await Promise.all(
+    channels.map((channel) =>
+      prisma.notification.upsert({
+        where: { sourceKey: `insight:${input.insightId}:${channel}` },
+        create: {
+          schoolId: input.schoolId,
+          insightId: input.insightId,
+          notificationType: 'INSIGHT',
+          notificationChannel: channel,
+          title: input.title,
+          message: input.message,
+          status: 'PENDING',
+          sourceKey: `insight:${input.insightId}:${channel}`,
+        },
+        update: {
+          title: input.title,
+          message: input.message,
+        },
+      }),
+    ),
+  )
 }
 
 const defaultReportDefinitions: Array<{

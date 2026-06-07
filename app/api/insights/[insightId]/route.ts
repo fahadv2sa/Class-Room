@@ -1,5 +1,6 @@
 import { authResponseError } from '@/lib/auth/session'
 import { assertSameSchool, getTenantFilter } from '@/lib/academic/access'
+import { syncInsightNotifications } from '@/lib/communication/api'
 import { includeInsightRelations, normalizeInsightStatus } from '@/lib/intelligence/api'
 import { prisma } from '@/lib/prisma'
 
@@ -42,6 +43,12 @@ export async function PATCH(
       where: { id: insightId },
       data: { status },
       include: includeInsightRelations,
+    })
+    await syncInsightNotifications({
+      schoolId: insight.schoolId,
+      insightId: insight.id,
+      title: insight.title,
+      message: insight.description,
     })
 
     return Response.json({ insight })

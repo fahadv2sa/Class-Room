@@ -8,6 +8,7 @@ import {
 } from '@prisma/client'
 import { scopedSchoolId } from '@/lib/academic/access'
 import type { AuthContext } from '@/lib/auth/session'
+import { syncAlertNotifications, syncInsightNotifications } from '@/lib/communication/api'
 import { prisma } from '@/lib/prisma'
 import { defaultSchoolSettings } from '@/lib/settings/defaults'
 
@@ -65,7 +66,7 @@ async function getSettings(schoolId: string) {
 }
 
 async function upsertAlert(input: AlertInput) {
-  await prisma.alert.upsert({
+  const alert = await prisma.alert.upsert({
     where: { sourceKey: input.sourceKey },
     create: {
       schoolId: input.schoolId,
@@ -87,11 +88,17 @@ async function upsertAlert(input: AlertInput) {
       severity: input.severity,
     },
   })
+  await syncAlertNotifications({
+    schoolId: alert.schoolId,
+    alertId: alert.id,
+    title: alert.title,
+    message: alert.description,
+  })
 }
 
 async function upsertInsight(input: InsightInput) {
   const detectedAt = input.detectedAt ?? new Date()
-  await prisma.insight.upsert({
+  const insight = await prisma.insight.upsert({
     where: { sourceKey: input.sourceKey },
     create: {
       schoolId: input.schoolId,
@@ -114,6 +121,12 @@ async function upsertInsight(input: InsightInput) {
       score: input.score,
       lastDetectedAt: detectedAt,
     },
+  })
+  await syncInsightNotifications({
+    schoolId: insight.schoolId,
+    insightId: insight.id,
+    title: insight.title,
+    message: insight.description,
   })
 }
 

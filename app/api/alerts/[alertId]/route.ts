@@ -1,5 +1,6 @@
 import { authResponseError } from '@/lib/auth/session'
 import { assertSameSchool, getTenantFilter } from '@/lib/academic/access'
+import { syncAlertNotifications } from '@/lib/communication/api'
 import { includeAlertRelations, normalizeAlertStatus } from '@/lib/intelligence/api'
 import { prisma } from '@/lib/prisma'
 
@@ -49,6 +50,12 @@ export async function PATCH(
         resolvedAt: status === 'RESOLVED' ? new Date() : status === 'OPEN' ? null : undefined,
       },
       include: includeAlertRelations,
+    })
+    await syncAlertNotifications({
+      schoolId: alert.schoolId,
+      alertId: alert.id,
+      title: alert.title,
+      message: alert.description,
     })
 
     return Response.json({ alert })
