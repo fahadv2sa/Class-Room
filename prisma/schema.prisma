@@ -217,6 +217,24 @@ enum InsightType {
   DEVICE_RELIABILITY_ISSUE
 }
 
+enum ManagementSubjectType {
+  SCHOOL
+  LEVEL
+  CLASSROOM
+  TEACHER
+  STUDENT
+}
+
+enum ManagementKpiType {
+  ATTENDANCE_RATE
+  LATE_RATE
+  NOISE_SCORE
+  MOVEMENT_SCORE
+  TEACHER_PUNCTUALITY
+  CLASSROOM_PERFORMANCE_SCORE
+  STUDENT_ATTENTION_SCORE
+}
+
 model SuperAdmin {
   id                           String                      @id @default(cuid())
   email                        String                      @unique
@@ -280,6 +298,7 @@ model School {
   classroomNoiseStates ClassroomNoiseState[]
   alerts            Alert[]
   insights          Insight[]
+  managementKpiSnapshots ManagementKpiSnapshot[]
 
   @@index([status])
   @@index([subscriptionStatus])
@@ -920,6 +939,33 @@ model Insight {
   @@index([status])
   @@index([lastDetectedAt])
   @@map("insights")
+}
+
+model ManagementKpiSnapshot {
+  id           String                @id @default(cuid())
+  schoolId     String                @map("school_id")
+  subjectType  ManagementSubjectType @map("subject_type")
+  subjectId    String?               @map("subject_id")
+  kpiType      ManagementKpiType     @map("kpi_type")
+  period       SummaryPeriod         @default(DAILY)
+  periodStart  DateTime              @map("period_start") @db.Date
+  periodEnd    DateTime              @map("period_end") @db.Date
+  value        Float
+  scoreVersion Int                   @default(1) @map("score_version")
+  sourceKey    String                @unique @map("source_key")
+  metadata     Json?
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  school       School                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([subjectType])
+  @@index([subjectId])
+  @@index([kpiType])
+  @@index([period])
+  @@index([periodStart])
+  @@index([periodEnd])
+  @@map("management_kpi_snapshots")
 }
 
 model SchoolSettings {

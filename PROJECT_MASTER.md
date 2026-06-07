@@ -6,7 +6,7 @@ Audience: future AI tools, developers, auditors, project managers, investors, an
 
 Last verified from repository state through:
 
-- Phase 2H.2 Alert & Insight Configuration
+- Phase 2I Management Intelligence Foundation
 
 This document describes verified repository facts only. It does not describe planned features as completed.
 
@@ -68,6 +68,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 - Phase 2H Operational Intelligence Foundation
 - Phase 2H.1 Event-Triggered Intelligence Correction
 - Phase 2H.2 Alert & Insight Configuration
+- Phase 2I Management Intelligence Foundation
 
 ### In Progress
 
@@ -75,7 +76,7 @@ The platform is moving from a dashboard prototype toward a production SaaS syste
 
 ### Planned
 
-- Reporting Engine
+- Reporting Delivery Engine
 - Phase 3.0 AI Layer
 
 ### Phase 2A: SaaS Foundation
@@ -778,6 +779,69 @@ Database changes:
 - `SchoolSettings.enabled_alert_types`
 - `SchoolSettings.enabled_insight_types`
 
+### Phase 2I: Management Intelligence Foundation
+
+Objective:
+
+Transform existing operational data into deterministic management intelligence for school leaders, owners, supervisors, and administrators.
+
+Implemented:
+
+- Versioned management KPI snapshot model.
+- KPI foundation for attendance, lateness, noise, movement, teacher punctuality, classroom performance, and student attention.
+- Reusable ranking service for top classrooms, bottom classrooms, top teachers, and students requiring attention.
+- Trend foundation using the existing `SummaryPeriod` architecture.
+- Comparison foundation for reusable subject comparisons.
+- Dedicated analytics API layer.
+- Existing Reports page connected to management KPIs and rankings while preserving the approved layout.
+
+Major architectural decisions:
+
+- Management intelligence derives from existing validated operational data.
+- No new source-of-truth operational model was created.
+- No raw operational data is duplicated.
+- Historical KPI snapshots include `score_version`.
+- Current management score version is `1`.
+- Scoring formulas are foundation models and may be replaced in future phases without invalidating historical snapshot interpretation.
+- Trend periods reuse `DAILY`, `WEEKLY`, `MONTHLY`, `TERM`, and `YEARLY`.
+- No AI, machine learning, recommendations, notification delivery, scheduled jobs, PDF reports, Excel exports, email reports, WhatsApp reports, or new operational engines were added.
+
+KPI foundation:
+
+- `ATTENDANCE_RATE`
+- `LATE_RATE`
+- `NOISE_SCORE`
+- `MOVEMENT_SCORE`
+- `TEACHER_PUNCTUALITY`
+- `CLASSROOM_PERFORMANCE_SCORE`
+- `STUDENT_ATTENTION_SCORE`
+
+Scoring philosophy:
+
+- Attendance rate is derived from existing student attendance records.
+- Late rate is derived from existing student attendance records.
+- Noise score is derived from existing noise summaries.
+- Movement score is derived from existing student movement records.
+- Classroom performance is a foundation weighted score combining attendance, noise, and movement.
+- Student attention score is a foundation score derived from existing attendance, movement, alert, and insight data.
+- Teacher punctuality currently uses teacher-linked classroom noise summaries as a placeholder foundation signal until teacher schedule data exists.
+
+APIs added:
+
+- `GET /api/analytics/kpis`
+- `GET /api/analytics/rankings`
+- `GET /api/analytics/trends`
+- `GET /api/analytics/comparisons`
+
+Database entities added:
+
+- `ManagementKpiSnapshot`
+
+Database changes:
+
+- `ManagementSubjectType`
+- `ManagementKpiType`
+
 Not implemented:
 
 - Weekly summary generation.
@@ -1014,7 +1078,7 @@ Tenant root record.
 
 Key relationships:
 
-- Owns SchoolAdmins, SchoolSettings, AcademicYears, SchoolLevels, Classrooms, ClassroomDevices, CardCredentials, RFIDScanEvents, AttendanceSessions, AttendanceRecords, Teachers, Students, Alerts, Insights, Subscriptions, and Sessions.
+- Owns SchoolAdmins, SchoolSettings, AcademicYears, SchoolLevels, Classrooms, ClassroomDevices, CardCredentials, RFIDScanEvents, AttendanceSessions, AttendanceRecords, Teachers, Students, Alerts, Insights, ManagementKpiSnapshots, Subscriptions, and Sessions.
 
 Important constraints:
 
@@ -1352,6 +1416,26 @@ Important constraints:
 - `source_key` prevents duplicate active pattern records for the same deterministic subject.
 - Insights are not AI, ML, prediction, reports, recommendations, or rankings.
 
+### ManagementKpiSnapshot
+
+Purpose:
+
+Versioned aggregate management KPI snapshot derived from existing operational data.
+
+Key relationships:
+
+- Belongs to School.
+- References a subject through `subject_type` and optional `subject_id`.
+
+Important constraints:
+
+- Every snapshot includes `school_id`.
+- Every snapshot includes `period`, `period_start`, and `period_end`.
+- Every snapshot includes `score_version`.
+- `source_key` prevents duplicate KPI snapshots for the same subject, KPI type, period, and score version.
+- Stores aggregate KPI values only; it does not duplicate raw attendance, movement, noise, alert, or insight data.
+- Used by management KPIs, rankings, trends, and comparisons.
+
 ### Teacher
 
 Purpose:
@@ -1593,6 +1677,15 @@ Permission terms:
 | GET | `/api/insights` | Read stored insights with pagination and filters | Tenant scoped |
 | GET | `/api/insights/[insightId]` | Get one insight | Tenant scoped |
 | PATCH | `/api/insights/[insightId]` | Update insight status | Tenant scoped |
+
+### Analytics
+
+| Method | Route | Purpose | Permissions |
+|---|---|---|---|
+| GET | `/api/analytics/kpis` | Read or refresh versioned management KPI snapshots for a school and period | Tenant scoped |
+| GET | `/api/analytics/rankings` | Return reusable management rankings for classrooms, teachers, and students | Tenant scoped |
+| GET | `/api/analytics/trends` | Return KPI trend snapshots using existing period architecture | Tenant scoped |
+| GET | `/api/analytics/comparisons` | Compare selected management subjects for one KPI and period | Tenant scoped |
 
 ### Teachers
 
@@ -2017,17 +2110,18 @@ The current AI insights component displays mock/prototype content only.
 - Phase 2H Operational Intelligence Foundation
 - Phase 2H.1 Event-Triggered Intelligence Correction
 - Phase 2H.2 Alert & Insight Configuration
+- Phase 2I Management Intelligence Foundation
 
 ### Next
 
-- Reporting Engine
+- Reporting Delivery Engine
 - Phase 3.0 AI Layer
 
 ### Planned Detail
 
-Reporting Engine:
+Reporting Delivery Engine:
 
-- Intended to add reporting data models, generation, and exports.
+- Intended to add report delivery, exports, and scheduled report workflows after management intelligence is stable.
 
 Phase 3.0 AI Layer:
 
